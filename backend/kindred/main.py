@@ -159,7 +159,12 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         content = await file.read()
         if len(content) > 5 * 1024 * 1024:
             raise HTTPException(413, "Avatar exceeds the 5 MB limit")
-        suffix = Path(file.filename or "avatar.png").suffix.lower() or ".png"
+        suffix = {
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
+        }[file.content_type]
         path = uploads / f"character-{character_id}{suffix}"
         path.write_bytes(content)
         url = f"/uploads/{path.name}"
@@ -386,8 +391,12 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
 
         @app.get("/{path:path}", include_in_schema=False)
         def frontend(path: str) -> FileResponse:
-            requested = frontend_dist / path
-            if path and requested.is_file():
+            requested = (frontend_dist / path).resolve()
+            if (
+                path
+                and requested.is_relative_to(frontend_dist.resolve())
+                and requested.is_file()
+            ):
                 return FileResponse(requested)
             return FileResponse(frontend_dist / "index.html")
 
@@ -395,4 +404,3 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
 
 
 app = create_app()
-

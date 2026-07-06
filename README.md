@@ -1,14 +1,89 @@
 # Kindred
 
-Kindred is a local-first, open-source web app for creating and chatting with
-fictional, literary, and custom characters. A local Ollama or llama.cpp server
-is the default model provider. Optional cloud calls are explicit, metered, and
-guarded by configurable budgets.
+Kindred is a local-first, open-source home for creating and chatting with
+fictional, literary, and custom characters. It pairs a quiet SMS-style web app
+with a FastAPI/SQLite service and a deliberately small model-adapter layer.
+Ollama is the default; llama.cpp is supported directly. An OpenAI-compatible
+cloud provider is available only when a character explicitly opts into it.
 
-The backend API, local persistence, model adapters, autonomous daemon, usage
-guardrails, push event plumbing, responsive web client, and backend/browser test
-suites are implemented. Deployment and operations documentation follows below
-and in `docs/`.
+![Kindred chat design](docs/design/kindred-primary-concept.png)
+
+## MVP capabilities
+
+- Create, edit, duplicate, and delete character profiles.
+- Keep multiple timestamped threads and browse all recent messages.
+- Chat through local Ollama or llama.cpp models.
+- Let characters initiate messages through a randomized daemon with quiet
+  hours, per-character cooldowns, and global anti-spam limits.
+- Receive live messages through WebSockets and, when HTTPS/VAPID are configured,
+  background notifications through Web Push and a service worker.
+- Search conversation history and export it as Markdown or JSON.
+- Record backend/model, prompt-context summary, and a short safe character
+  rationale—never hidden model chain-of-thought.
+- Opt into an OpenAI-compatible provider with request, token, spend, and image
+  limits checked before dispatch. Cloud dry-run is on by default.
+- Develop on Apple Silicon and deploy the same app image on ARM64 Raspberry Pi.
+
+## Quick start on macOS
+
+Prerequisites: Python 3.11+, Node 22+, and either Ollama or `llama-server`.
+
+```bash
+cp .env.example .env
+python3 -m venv .venv
+.venv/bin/pip install -e './backend[dev,notifications]'
+cd frontend && npm install && cd ..
+ollama pull llama3.2:1b
+./scripts/dev.sh
+```
+
+Open `http://127.0.0.1:5173`. The API and interactive OpenAPI documentation are
+at `http://127.0.0.1:8000/docs`. `scripts/dev.sh` loads `.env` automatically.
+
+For a production-style local run, build the client and let FastAPI serve it:
+
+```bash
+./scripts/start.sh
+```
+
+Then open `http://127.0.0.1:8000`.
+
+## Docker
+
+Docker Compose builds a multi-stage `linux/arm64`-compatible image. Ollama or
+llama.cpp normally runs on the host so model files and accelerator settings
+remain independent from the web app.
+
+```bash
+cp .env.example .env
+docker compose -f docker/compose.yml up --build
+```
+
+The SQLite database, uploads, subscriptions, usage records, and logs live in the
+`kindred-data` volume. See [Raspberry Pi installation](docs/INSTALL_RASPBERRY_PI.md)
+before exposing port 8000 on a LAN.
+
+## Tests
+
+```bash
+./scripts/test.sh
+```
+
+The deterministic browser flow uses a tiny Ollama-shaped test server:
+
+```bash
+python3 scripts/mock_ollama.py
+KINDRED_DATABASE_PATH=/tmp/kindred-e2e.db \
+  KINDRED_DAEMON_ENABLED=false \
+  .venv/bin/uvicorn kindred.main:app --app-dir backend
+cd frontend && npm run test:e2e
+```
+
+The smoke test can target any running instance:
+
+```bash
+python3 scripts/smoke_test.py http://127.0.0.1:8000
+```
 
 ## Repository layout
 
@@ -16,11 +91,33 @@ and in `docs/`.
 backend/   FastAPI API, SQLite persistence, model adapters, and daemon
 frontend/  Lightweight React/Vite web interface and service worker
 docs/      Architecture, installation, operations, and limitations
-scripts/   Development, smoke-test, seed, and key-generation helpers
+scripts/   Development, smoke-test, test double, and key-generation helpers
 config/    Committed safe defaults
-data/      Runtime SQLite data (ignored) and committed example seeds
-docker/    Multi-architecture container definitions
+data/      Ignored runtime data and committed example character seeds
+docker/    Multi-architecture image and Compose definition
 ```
 
-The target development platform is macOS Apple Silicon. Deployment targets
-include Raspberry Pi 400 and Raspberry Pi 4 with a 64-bit operating system.
+## Configuration and data
+
+Copy `.env.example` to `.env`. Character profiles, messages, usage records, and
+settings are stored in `data/kindred.db` by default. Avatars uploaded through
+the API live under `data/uploads/`. Both paths are ignored by Git.
+
+Kindred has no authentication in this MVP. Treat it like a personal home
+service: bind it only to trusted interfaces, put HTTPS and authentication in a
+reverse proxy before wider network exposure, and never commit `.env`, model
+files, database files, uploads, or VAPID private keys.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Install on macOS](docs/INSTALL_MAC.md)
+- [Install on Raspberry Pi](docs/INSTALL_RASPBERRY_PI.md)
+- [Local models](docs/LOCAL_MODELS.md)
+- [Cloud backends](docs/CLOUD_BACKENDS.md)
+- [Notifications](docs/NOTIFICATIONS.md)
+- [Rate limiting](docs/RATE_LIMITING.md)
+- [Development](docs/DEVELOPMENT.md)
+- [Roadmap](docs/ROADMAP.md)
+
+Kindred is MIT licensed. See [CHANGELOG.md](CHANGELOG.md) for milestones.

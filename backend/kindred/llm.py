@@ -172,7 +172,11 @@ class LLMService:
         model = character["model"]
         input_estimate = approximate_tokens(prompt_text)
         if cloud:
-            self.limiter.check_cloud(input_estimate + 512)
+            preflight_cost = (input_estimate * 0.0000005) + (512 * 0.0000015)
+            self.limiter.check_cloud(
+                input_estimate + 512,
+                estimated_cost_usd=preflight_cost,
+            )
             if self.settings.cloud_dry_run:
                 content = (
                     "[Cloud dry run] This character is configured for an OpenAI-compatible "
@@ -271,4 +275,3 @@ class LLMService:
                 "url": self.settings.cloud_base_url,
             },
         }
-

@@ -23,3 +23,7 @@ versioning once the first release is tagged.
 - Service worker and WebSocket live-event fallback for character messages.
 - Deterministic Ollama-shaped test server plus desktop/mobile Playwright
   end-to-end coverage for the complete MVP flow.
+- Multi-stage ARM64-compatible Docker deployment, development/production/smoke
+  scripts, VAPID key generation, and complete macOS/Raspberry Pi documentation.
+- Preflight cloud spend checks that reject a request before it would cross the
+  configured ceiling.

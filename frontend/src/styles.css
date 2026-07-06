@@ -1069,6 +1069,10 @@ p {
   align-items: center;
 }
 
+.notification-toggle {
+  grid-column: 1 / -1;
+}
+
 .notification-settings .icon-button {
   color: var(--plum);
   border-color: #ddc9d8;

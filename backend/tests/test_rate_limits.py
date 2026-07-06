@@ -32,3 +32,8 @@ def test_image_limit_is_independent(database):
     with pytest.raises(LimitExceeded, match="Image-generations"):
         limiter.check_cloud(estimated_tokens=0, request_kind="image")
 
+
+def test_estimated_call_cost_cannot_cross_ceiling(database):
+    limiter = RateLimiter(database)
+    with pytest.raises(LimitExceeded, match="spend ceiling"):
+        limiter.check_cloud(estimated_tokens=1, estimated_cost_usd=1.01)
