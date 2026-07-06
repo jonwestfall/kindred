@@ -1,0 +1,41 @@
+# Secrets and local configuration
+.env
+*.pem
+config/local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Local data, generated logs, and uploads
+data/*
+!data/.gitkeep
+!data/seed/
+backend/data/*
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+logs/
+
+# Model files
+*.gguf
+*.ggml
+models/
+
+# Tooling and OS files
+.DS_Store
+.idea/
+.vscode/
+coverage/
+htmlcov/
+

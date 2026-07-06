@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: kindred
+Version: 0.1.0
+Summary: Local-first character chat backend
+Requires-Python: >=3.11
+Requires-Dist: fastapi<1,>=0.115
+Requires-Dist: httpx<1,>=0.27
+Requires-Dist: python-multipart<1,>=0.0.12
+Requires-Dist: uvicorn[standard]<1,>=0.30
+Provides-Extra: notifications
+Requires-Dist: pywebpush<3,>=2.0; extra == "notifications"
+Requires-Dist: py-vapid<2,>=1.9; extra == "notifications"
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8.3; extra == "dev"
+Requires-Dist: pytest-asyncio<1,>=0.24; extra == "dev"
