@@ -4,7 +4,7 @@ test("create, chat, autonomous message, notification setup, and export", async (
   browser,
 }) => {
   const context = await browser.newContext({
-    viewport: { width: 1440, height: 960 },
+    viewport: { width: 1536, height: 1048 },
     permissions: ["notifications"],
   });
   const page = await context.newPage();
