@@ -43,6 +43,8 @@ class NotificationService:
             await asyncio.to_thread(self._send_web_push, event)
 
     def _send_web_push(self, event: dict[str, Any]) -> None:
+        if not self.database.get_settings().get("notifications", {}).get("enabled", True):
+            return
         if not self.settings.vapid_private_key or not self.settings.vapid_public_key:
             return
         try:
@@ -68,4 +70,3 @@ class NotificationService:
                 status = getattr(getattr(exc, "response", None), "status_code", None)
                 if status in {404, 410}:
                     self.database.delete_subscription(subscription.get("endpoint", ""))
-

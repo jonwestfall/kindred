@@ -18,7 +18,13 @@ class RateLimiter:
 
     database: Database
 
-    def check_cloud(self, estimated_tokens: int, *, request_kind: str = "chat") -> None:
+    def check_cloud(
+        self,
+        estimated_tokens: int,
+        *,
+        estimated_cost_usd: float = 0,
+        request_kind: str = "chat",
+    ) -> None:
         settings = self.database.get_settings().get("limits", {})
         now = datetime.now(UTC)
         hourly = self.database.usage_since(now - timedelta(hours=1))
@@ -29,8 +35,10 @@ class RateLimiter:
             raise LimitExceeded("Cloud requests-per-day limit reached")
         if daily["tokens"] + estimated_tokens > float(settings.get("tokens_per_day", 50000)):
             raise LimitExceeded("Cloud tokens-per-day limit would be exceeded")
-        if daily["cost"] >= float(settings.get("cloud_spend_ceiling_usd", 2.0)):
-            raise LimitExceeded("Cloud spend ceiling reached")
+        if daily["cost"] + estimated_cost_usd > float(
+            settings.get("cloud_spend_ceiling_usd", 2.0)
+        ):
+            raise LimitExceeded("Cloud spend ceiling would be exceeded")
         if request_kind == "image":
             images = self.database.usage_since(now - timedelta(days=1), request_kind="image")
             if images["requests"] >= float(settings.get("image_generations_per_day", 2)):
@@ -45,4 +53,3 @@ class RateLimiter:
             "day": self.database.usage_since(now - timedelta(days=1)),
             "limits": self.database.get_settings().get("limits", {}),
         }
-

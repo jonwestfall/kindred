@@ -26,11 +26,10 @@ export function SettingsPage({ characters }: { characters: Character[] }) {
       "notifications",
       "world_notes",
     ];
-    let updated = settings;
-    for (const section of sections) {
-      updated = await api.settings.update(section, settings[section]);
-    }
-    setSettings(updated);
+    await Promise.all(
+      sections.map((section) => api.settings.update(section, settings[section])),
+    );
+    setSettings(await api.settings.get());
     setSaved("Saved locally");
     window.setTimeout(() => setSaved(""), 2500);
   }
@@ -96,6 +95,42 @@ export function SettingsPage({ characters }: { characters: Character[] }) {
                     setSettings({
                       ...settings,
                       daemon: { ...settings.daemon, quiet_hours_end: event.target.value },
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <div className="two-fields">
+              <label className="field">
+                <span>Autonomous messages per hour</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={settings.daemon.global_messages_per_hour}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      daemon: {
+                        ...settings.daemon,
+                        global_messages_per_hour: Number(event.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Autonomous messages per day</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={settings.daemon.global_messages_per_day}
+                  onChange={(event) =>
+                    setSettings({
+                      ...settings,
+                      daemon: {
+                        ...settings.daemon,
+                        global_messages_per_day: Number(event.target.value),
+                      },
                     })
                   }
                 />
@@ -170,6 +205,19 @@ export function SettingsPage({ characters }: { characters: Character[] }) {
             </p>
           </div>
           <div className="settings-fields notification-settings">
+            <label className="toggle-row notification-toggle">
+              <span>Allow Web Push delivery</span>
+              <input
+                type="checkbox"
+                checked={settings.notifications.enabled}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    notifications: { enabled: event.target.checked },
+                  })
+                }
+              />
+            </label>
             <NotificationButton />
             <p>Use the bell to request browser permission and register this browser.</p>
           </div>
