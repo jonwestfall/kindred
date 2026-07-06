@@ -17,3 +17,9 @@ versioning once the first release is tagged.
   Markdown/JSON export, cloud budgets, and dry-run image-provider scaffolding.
 - Backend tests for character CRUD, message logging, rate limiting, and daemon
   scheduling.
+- Responsive React/Vite client with SMS-style chat, character editing,
+  recent-conversation and all-activity views, settings, local backend status,
+  cloud warnings, and notification permission flow.
+- Service worker and WebSocket live-event fallback for character messages.
+- Deterministic Ollama-shaped test server plus desktop/mobile Playwright
+  end-to-end coverage for the complete MVP flow.
