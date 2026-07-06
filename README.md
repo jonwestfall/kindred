@@ -6,8 +6,9 @@ is the default model provider. Optional cloud calls are explicit, metered, and
 guarded by configurable budgets.
 
 The backend API, local persistence, model adapters, autonomous daemon, usage
-guardrails, push event plumbing, and test suite are implemented. The web client
-and deployment documentation are the next milestone.
+guardrails, push event plumbing, responsive web client, and backend/browser test
+suites are implemented. Deployment and operations documentation follows below
+and in `docs/`.
 
 ## Repository layout
 
