@@ -5,8 +5,9 @@ fictional, literary, and custom characters. A local Ollama or llama.cpp server
 is the default model provider. Optional cloud calls are explicit, metered, and
 guarded by configurable budgets.
 
-> Kindred is under active MVP construction. See `CHANGELOG.md` for the current
-> implementation status.
+The backend API, local persistence, model adapters, autonomous daemon, usage
+guardrails, push event plumbing, and test suite are implemented. The web client
+and deployment documentation are the next milestone.
 
 ## Repository layout
 
@@ -22,4 +23,3 @@ docker/    Multi-architecture container definitions
 
 The target development platform is macOS Apple Silicon. Deployment targets
 include Raspberry Pi 400 and Raspberry Pi 4 with a 64-bit operating system.
-

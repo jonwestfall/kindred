@@ -10,6 +10,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+*.egg-info/
 
 # Frontend
 frontend/node_modules/
@@ -38,4 +39,3 @@ models/
 .vscode/
 coverage/
 htmlcov/
-
