@@ -1,0 +1,22 @@
+{
+  "daemon": {
+    "enabled": true,
+    "quiet_hours_start": "22:00",
+    "quiet_hours_end": "08:00",
+    "check_interval_seconds": 60,
+    "global_messages_per_hour": 4,
+    "global_messages_per_day": 12
+  },
+  "limits": {
+    "requests_per_hour": 20,
+    "requests_per_day": 100,
+    "tokens_per_day": 50000,
+    "cloud_spend_ceiling_usd": 2.0,
+    "image_generations_per_day": 2
+  },
+  "notifications": {
+    "enabled": true
+  },
+  "world_notes": ""
+}
+
