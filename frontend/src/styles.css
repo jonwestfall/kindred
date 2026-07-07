@@ -747,9 +747,29 @@ p {
   font-size: 31px;
 }
 
+.page-kicker {
+  max-width: 690px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .header-actions {
   display: flex;
   gap: 8px;
+}
+
+.file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .import-status {
@@ -1252,6 +1272,67 @@ p {
   font-size: 11px;
 }
 
+.lore-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.42fr);
+  gap: 24px;
+  align-items: start;
+  padding: 24px 0;
+}
+
+.lore-packs {
+  display: grid;
+  gap: 12px;
+}
+
+.lore-packs h2,
+.lore-assignment h2 {
+  margin: 0 0 4px;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 23px;
+}
+
+.lore-pack-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.lore-pack-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.lore-pack-card p,
+.lore-pack-card small,
+.lore-assignment p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lore-pack-card p {
+  margin: 6px 0;
+}
+
+.lore-pack-card small {
+  display: block;
+}
+
+.lore-assignment {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--wash);
+}
+
 .system-section {
   max-width: 1050px;
   padding: 28px 0;
@@ -1387,6 +1468,10 @@ p {
 
   .settings-section {
     gap: 30px;
+  }
+
+  .lore-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1620,6 +1705,10 @@ p {
   }
 
   .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lore-pack-card {
     grid-template-columns: 1fr;
   }
 

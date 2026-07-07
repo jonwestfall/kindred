@@ -8,6 +8,7 @@ under FastAPI and avoids an ORM footprint on Raspberry Pi hardware.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -105,6 +106,35 @@ CREATE TABLE IF NOT EXISTS user_character_access (
     created_at TEXT NOT NULL,
     PRIMARY KEY(user_id, character_id)
 );
+CREATE TABLE IF NOT EXISTS lore_packs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    source_title TEXT NOT NULL DEFAULT '',
+    source_author TEXT NOT NULL DEFAULT '',
+    source_reference TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lore_facts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pack_id INTEGER NOT NULL REFERENCES lore_packs(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    keywords_json TEXT NOT NULL DEFAULT '[]',
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    source_reference TEXT NOT NULL DEFAULT '',
+    weight REAL NOT NULL DEFAULT 1.0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lore_facts_pack ON lore_facts(pack_id);
+CREATE TABLE IF NOT EXISTS character_lore_packs (
+    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    pack_id INTEGER NOT NULL REFERENCES lore_packs(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(character_id, pack_id)
+);
+CREATE INDEX IF NOT EXISTS idx_character_lore_packs_pack ON character_lore_packs(pack_id);
 """
 
 CHARACTER_COLUMNS = (
@@ -123,6 +153,7 @@ CHARACTER_COLUMNS = (
     "cooldown_minutes",
 )
 _ANY = object()
+_TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
 
 
 def utc_now() -> datetime:
@@ -135,6 +166,12 @@ def iso(value: datetime | None = None) -> str:
     """Serialize a timestamp consistently for SQLite ordering."""
 
     return (value or utc_now()).astimezone(UTC).isoformat()
+
+
+def _tokens(value: str) -> set[str]:
+    """Small lexical tokenizer for local, dependency-free lore retrieval."""
+
+    return {token.casefold() for token in _TOKEN_RE.findall(value) if len(token) > 2}
 
 
 class Database:
@@ -257,6 +294,184 @@ class Database:
         with self.connection() as connection:
             cursor = connection.execute("DELETE FROM characters WHERE id = ?", (character_id,))
         return cursor.rowcount > 0
+
+    def create_lore_pack(self, values: dict[str, Any], facts: Sequence[dict[str, Any]]) -> dict[str, Any]:
+        """Import a versioned lore/fact file and return the stored pack."""
+
+        now = iso()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """INSERT INTO lore_packs(
+                    name, description, source_title, source_author, source_reference, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    values.get("name", ""),
+                    values.get("description", ""),
+                    values.get("source_title", ""),
+                    values.get("source_author", ""),
+                    values.get("source_reference", ""),
+                    now,
+                    now,
+                ),
+            )
+            pack_id = int(cursor.lastrowid)
+            for fact in facts:
+                connection.execute(
+                    """INSERT INTO lore_facts(
+                        pack_id, title, content, keywords_json, tags_json, source_reference, weight, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        pack_id,
+                        fact.get("title", ""),
+                        fact["content"],
+                        json.dumps(fact.get("keywords", [])),
+                        json.dumps(fact.get("tags", [])),
+                        fact.get("source_reference", ""),
+                        float(fact.get("weight", 1.0)),
+                        now,
+                    ),
+                )
+        return self.get_lore_pack(pack_id)  # type: ignore[return-value]
+
+    def list_lore_packs(self) -> list[dict[str, Any]]:
+        """List imported lore packs with compact fact counts for admin screens."""
+
+        with self.connection() as connection:
+            rows = connection.execute(
+                """SELECT p.*,
+                          COUNT(DISTINCT f.id) AS fact_count,
+                          GROUP_CONCAT(DISTINCT a.character_id) AS assigned_character_ids
+                   FROM lore_packs p
+                   LEFT JOIN lore_facts f ON f.pack_id = p.id
+                   LEFT JOIN character_lore_packs a ON a.pack_id = p.id
+                   GROUP BY p.id
+                   ORDER BY p.updated_at DESC, p.name COLLATE NOCASE"""
+            ).fetchall()
+        results = []
+        for row in rows:
+            result = dict(row)
+            assigned = result.pop("assigned_character_ids") or ""
+            result["character_ids"] = sorted(
+                {int(value) for value in assigned.split(",") if value.strip()}
+            )
+            result["facts"] = []
+            results.append(result)
+        return results
+
+    def get_lore_pack(self, pack_id: int) -> dict[str, Any] | None:
+        """Fetch one lore pack with all facts decoded for export or editing."""
+
+        with self.connection() as connection:
+            pack = connection.execute("SELECT * FROM lore_packs WHERE id = ?", (pack_id,)).fetchone()
+            if not pack:
+                return None
+            facts = connection.execute(
+                "SELECT * FROM lore_facts WHERE pack_id = ? ORDER BY id",
+                (pack_id,),
+            ).fetchall()
+            assigned = connection.execute(
+                "SELECT character_id FROM character_lore_packs WHERE pack_id = ? ORDER BY character_id",
+                (pack_id,),
+            ).fetchall()
+        result = dict(pack)
+        result["character_ids"] = [int(row["character_id"]) for row in assigned]
+        result["facts"] = [self._decode_lore_fact(row) for row in facts]
+        result["fact_count"] = len(result["facts"])
+        return result
+
+    def delete_lore_pack(self, pack_id: int) -> bool:
+        """Delete a lore pack, its facts, and all character assignments."""
+
+        with self.connection() as connection:
+            cursor = connection.execute("DELETE FROM lore_packs WHERE id = ?", (pack_id,))
+        return cursor.rowcount > 0
+
+    def list_character_lore_pack_ids(self, character_id: int) -> list[int]:
+        """Return lore packs attached to one character."""
+
+        with self.connection() as connection:
+            rows = connection.execute(
+                "SELECT pack_id FROM character_lore_packs WHERE character_id = ? ORDER BY pack_id",
+                (character_id,),
+            ).fetchall()
+        return [int(row["pack_id"]) for row in rows]
+
+    def replace_character_lore_packs(self, character_id: int, pack_ids: Sequence[int]) -> list[int] | None:
+        """Replace the complete set of lore packs assigned to one character."""
+
+        if not self.get_character(character_id):
+            return None
+        unique_ids = sorted({int(pack_id) for pack_id in pack_ids})
+        now = iso()
+        with self.connection() as connection:
+            existing = {
+                int(row["id"])
+                for row in connection.execute(
+                    f"SELECT id FROM lore_packs WHERE id IN ({','.join('?' for _ in unique_ids)})",
+                    tuple(unique_ids),
+                ).fetchall()
+            } if unique_ids else set()
+            if existing != set(unique_ids):
+                missing = sorted(set(unique_ids) - existing)
+                raise ValueError(f"Lore pack does not exist: {missing[0]}")
+            connection.execute("DELETE FROM character_lore_packs WHERE character_id = ?", (character_id,))
+            for pack_id in unique_ids:
+                connection.execute(
+                    """INSERT INTO character_lore_packs(character_id, pack_id, created_at)
+                       VALUES (?, ?, ?)""",
+                    (character_id, pack_id, now),
+                )
+        return unique_ids
+
+    def search_lore(self, character_id: int, query: str, limit: int = 6) -> list[dict[str, Any]]:
+        """Rank assigned facts with a local lexical score.
+
+        This is intentionally simple for the MVP: no embeddings service, no
+        vector database, and no network calls. It gives characters grounded
+        facts on Pi-class hardware and leaves room for optional embedding
+        adapters later.
+        """
+
+        pack_ids = self.list_character_lore_pack_ids(character_id)
+        if not pack_ids:
+            return []
+        placeholders = ",".join("?" for _ in pack_ids)
+        with self.connection() as connection:
+            rows = connection.execute(
+                f"""SELECT f.*, p.name AS pack_name
+                    FROM lore_facts f
+                    JOIN lore_packs p ON p.id = f.pack_id
+                    WHERE f.pack_id IN ({placeholders})""",
+                tuple(pack_ids),
+            ).fetchall()
+        query_tokens = _tokens(query)
+        ranked: list[tuple[float, dict[str, Any]]] = []
+        for row in rows:
+            fact = self._decode_lore_fact(row)
+            title_tokens = _tokens(fact["title"])
+            content_tokens = _tokens(fact["content"])
+            keyword_tokens = _tokens(" ".join(fact["keywords"] + fact["tags"]))
+            if query_tokens:
+                score = (
+                    3 * len(query_tokens & keyword_tokens)
+                    + 2 * len(query_tokens & title_tokens)
+                    + len(query_tokens & content_tokens)
+                )
+            else:
+                score = 1
+            weighted = float(fact["weight"]) * score
+            if weighted > 0:
+                ranked.append((weighted, fact))
+        ranked.sort(key=lambda item: (item[0], item[1]["weight"], item[1]["id"]), reverse=True)
+        return [fact for _, fact in ranked[:limit]]
+
+    def _decode_lore_fact(self, row: sqlite3.Row) -> dict[str, Any]:
+        """Decode SQLite JSON columns from a lore_facts row."""
+
+        result = dict(row)
+        result["keywords"] = json.loads(result.pop("keywords_json") or "[]")
+        result["tags"] = json.loads(result.pop("tags_json") or "[]")
+        return result
 
     def duplicate_character(self, character_id: int) -> dict[str, Any] | None:
         original = self.get_character(character_id)

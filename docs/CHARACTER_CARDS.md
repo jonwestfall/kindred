@@ -44,6 +44,10 @@ A card bundle contains one or more characters:
 Kindred imports the core chat fields into SQLite. Source metadata travels in the
 file for humans and tools; it is not required for chat.
 
+Character cards are persona files. Use [lore and fact packs](LORE_FACTS.md) for
+retrievable canon, worldbuilding, chronology, and relationship details that
+should ground generation without making the character profile huge.
+
 ## Import and export in the UI
 
 Sign in as the administrator and open **Characters**.
@@ -135,6 +139,12 @@ Character notes or source summary:
 If the book is copyrighted, provide your own notes or a short summary rather
 than asking the LLM to reproduce source passages. Kindred works best with
 original profile text that captures behavior and constraints, not copied prose.
+
+For richer characters, ask the LLM for two files: one
+`kindred.character_card.v1` character card and one `kindred.fact_pack.v1` lore
+file. Import the character under **Characters**, import the fact pack under
+**Lore**, then assign the pack to the character. The fact-pack prompt lives in
+[Lore and fact packs](LORE_FACTS.md).
 
 ## Good adaptation boundaries
 

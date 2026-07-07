@@ -4,6 +4,7 @@ import type {
   CharacterDraft,
   CharacterImportResult,
   Health,
+  LorePack,
   LogRecord,
   Message,
   SessionInfo,
@@ -87,6 +88,22 @@ export const api = {
         body: JSON.stringify(bundle),
       }),
   },
+  lore: {
+    list: () => request<LorePack[]>("/lore-packs"),
+    importPack: (bundle: unknown) =>
+      request<LorePack>("/lore-packs/import", {
+        method: "POST",
+        body: JSON.stringify(bundle),
+      }),
+    getAssignment: (characterId: number) =>
+      request<{ pack_ids: number[] }>(`/characters/${characterId}/lore-packs`),
+    setAssignment: (characterId: number, packIds: number[]) =>
+      request<{ pack_ids: number[] }>(`/characters/${characterId}/lore-packs`, {
+        method: "PUT",
+        body: JSON.stringify({ pack_ids: packIds }),
+      }),
+    remove: (id: number) => request<void>(`/lore-packs/${id}`, { method: "DELETE" }),
+  },
   threads: {
     list: () => request<Thread[]>("/threads"),
     create: (characterId: number) =>
@@ -154,6 +171,10 @@ export function charactersExportUrl(): string {
 
 export function characterExportUrl(characterId: number): string {
   return `${API_BASE}/characters/${characterId}/export?${tokenParams()}`;
+}
+
+export function lorePackExportUrl(packId: number): string {
+  return `${API_BASE}/lore-packs/${packId}/export?${tokenParams()}`;
 }
 
 export function websocketUrl(): string {

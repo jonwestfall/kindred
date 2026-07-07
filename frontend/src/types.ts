@@ -26,6 +26,33 @@ export interface CharacterImportResult {
   skipped: string[];
 }
 
+export interface LoreFact {
+  id: number;
+  pack_id: number;
+  pack_name?: string | null;
+  title: string;
+  content: string;
+  keywords: string[];
+  tags: string[];
+  source_reference: string;
+  weight: number;
+  created_at: string;
+}
+
+export interface LorePack {
+  id: number;
+  name: string;
+  description: string;
+  source_title: string;
+  source_author: string;
+  source_reference: string;
+  facts: LoreFact[];
+  fact_count: number;
+  character_ids: number[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Thread {
   id: number;
   character_id: number;

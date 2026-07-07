@@ -26,6 +26,8 @@ cloud provider is available only when a character explicitly opts into it.
   assign character access, and let admins view/export all chats.
 - Import/export portable JSON character cards for trading, backup, and
   LLM-assisted character creation.
+- Import/export lore and fact packs for local retrieval augmented generation,
+  then assign those packs per character.
 - Develop on Apple Silicon and deploy the same app image on ARM64 Raspberry Pi.
 
 ## Quick start on macOS
@@ -128,6 +130,8 @@ uploads, or VAPID private keys.
 - [Authentication](docs/AUTHENTICATION.md)
 - [Character cards](docs/CHARACTER_CARDS.md)
 - [Docker Compose examples](docs/DOCKER_COMPOSE.md)
+- [Lore and fact packs](docs/LORE_FACTS.md)
+- [Model recommendations](docs/MODEL_RECOMMENDATIONS.md)
 - [Install on macOS](docs/INSTALL_MAC.md)
 - [Install on Raspberry Pi](docs/INSTALL_RASPBERRY_PI.md)
 - [Local models](docs/LOCAL_MODELS.md)

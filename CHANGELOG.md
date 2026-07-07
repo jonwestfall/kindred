@@ -34,3 +34,5 @@ versioning once the first release is tagged.
   Caddy reverse proxying, and Tailscale Serve HTTPS deployment.
 - Portable `kindred.character_card.v1` JSON import/export for character backup,
   trading, and LLM-generated character-card creation.
+- Portable `kindred.fact_pack.v1` lore/fact-pack import/export, per-character
+  assignment, local retrieval grounding, and model recommendation docs.

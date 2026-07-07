@@ -100,6 +100,66 @@ class CharacterImportResult(BaseModel):
     skipped: list[str]
 
 
+class LoreFactInput(BaseModel):
+    """One atomic fact available for lightweight retrieval."""
+
+    title: str = Field(default="", max_length=300)
+    content: str = Field(min_length=1, max_length=4000)
+    keywords: list[str] = Field(default_factory=list, max_length=24)
+    tags: list[str] = Field(default_factory=list, max_length=24)
+    source_reference: str = Field(default="", max_length=1000)
+    weight: float = Field(default=1.0, ge=0.1, le=5)
+
+
+class LorePackFile(BaseModel):
+    """Versioned Kindred lore/fact-pack import/export file."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    schema_: Literal["kindred.fact_pack.v1"] = Field(
+        default="kindred.fact_pack.v1",
+        alias="schema",
+    )
+    exported_at: datetime | None = None
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    source_title: str = Field(default="", max_length=500)
+    source_author: str = Field(default="", max_length=300)
+    source_reference: str = Field(default="", max_length=1000)
+    facts: list[LoreFactInput] = Field(min_length=1, max_length=500)
+
+
+class LoreFact(LoreFactInput):
+    """Stored lore fact record."""
+
+    id: int
+    pack_id: int
+    pack_name: str | None = None
+    created_at: datetime
+
+
+class LorePack(BaseModel):
+    """Stored lore pack with decoded facts when requested."""
+
+    id: int
+    name: str
+    description: str
+    source_title: str
+    source_author: str
+    source_reference: str
+    facts: list[LoreFact] = Field(default_factory=list)
+    fact_count: int = 0
+    character_ids: list[int] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class LorePackAssignment(BaseModel):
+    """Complete lore-pack assignment set for one character."""
+
+    pack_ids: list[int] = Field(default_factory=list, max_length=100)
+
+
 class ThreadCreate(BaseModel):
     """Create a conversation thread for one character."""
 

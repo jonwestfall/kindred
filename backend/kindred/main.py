@@ -54,6 +54,9 @@ from .schemas import (
     CharacterUpdate,
     ChatRequest,
     ImageGenerationRequest,
+    LorePack,
+    LorePackAssignment,
+    LorePackFile,
     LoginRequest,
     LoginResponse,
     Message,
@@ -93,6 +96,20 @@ def _bundle_for_characters(characters: list[dict[str, Any]]) -> CharacterCardBun
     return CharacterCardBundle(
         exported_at=datetime.now(UTC),
         characters=[_character_to_card(character) for character in characters],
+    )
+
+
+def _file_for_lore_pack(pack: dict[str, Any]) -> LorePackFile:
+    """Convert a stored lore pack into a portable fact-pack file."""
+
+    return LorePackFile(
+        exported_at=datetime.now(UTC),
+        name=pack["name"],
+        description=pack["description"],
+        source_title=pack["source_title"],
+        source_author=pack["source_author"],
+        source_reference=pack["source_reference"],
+        facts=pack["facts"],
     )
 
 
@@ -377,6 +394,95 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     def delete_character(character_id: int, _: Principal = Depends(require_admin)) -> Response:
         if not database.delete_character(character_id):
             raise HTTPException(404, "Character not found")
+        return Response(status_code=204)
+
+    @app.get(
+        "/api/characters/{character_id}/lore-packs",
+        response_model=LorePackAssignment,
+        tags=["lore"],
+    )
+    def get_character_lore_packs(
+        character_id: int,
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, list[int]]:
+        """Return lore/fact packs currently attached to one character."""
+
+        if not database.get_character(character_id):
+            raise HTTPException(404, "Character not found")
+        return {"pack_ids": database.list_character_lore_pack_ids(character_id)}
+
+    @app.put(
+        "/api/characters/{character_id}/lore-packs",
+        response_model=LorePackAssignment,
+        tags=["lore"],
+    )
+    def update_character_lore_packs(
+        character_id: int,
+        payload: LorePackAssignment,
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, list[int]]:
+        """Replace the fact-pack assignments used for character retrieval."""
+
+        try:
+            pack_ids = database.replace_character_lore_packs(character_id, payload.pack_ids)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        if pack_ids is None:
+            raise HTTPException(404, "Character not found")
+        return {"pack_ids": pack_ids}
+
+    @app.get("/api/lore-packs", response_model=list[LorePack], tags=["lore"])
+    def list_lore_packs(_: Principal = Depends(require_admin)) -> list[dict[str, Any]]:
+        """List imported lore/fact packs for admin management."""
+
+        return database.list_lore_packs()
+
+    @app.post("/api/lore-packs/import", response_model=LorePack, status_code=201, tags=["lore"])
+    def import_lore_pack(
+        payload: LorePackFile,
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """Import a versioned lore/fact-pack file for later character assignment."""
+
+        values = payload.model_dump(by_alias=False, exclude={"facts", "schema_", "exported_at"})
+        facts = [fact.model_dump() for fact in payload.facts]
+        return database.create_lore_pack(values, facts)
+
+    @app.get("/api/lore-packs/{pack_id}", response_model=LorePack, tags=["lore"])
+    def get_lore_pack(pack_id: int, _: Principal = Depends(require_admin)) -> dict[str, Any]:
+        """Fetch one lore/fact pack with its facts."""
+
+        pack = database.get_lore_pack(pack_id)
+        if not pack:
+            raise HTTPException(404, "Lore pack not found")
+        return pack
+
+    @app.get("/api/lore-packs/{pack_id}/export", tags=["lore"])
+    def export_lore_pack(
+        pack_id: int,
+        access_token: str = "",
+        authorization: str | None = Header(default=None),
+    ) -> JSONResponse:
+        """Download one lore/fact pack as a portable Kindred import file."""
+
+        principal = _principal_from_download_token(access_token, authorization)
+        if not principal.is_admin:
+            raise HTTPException(403, "Administrator access required")
+        pack = database.get_lore_pack(pack_id)
+        if not pack:
+            raise HTTPException(404, "Lore pack not found")
+        filename = f"kindred-fact-pack-{_safe_filename(pack['name'])}.json"
+        return JSONResponse(
+            jsonable_encoder(_file_for_lore_pack(pack)),
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.delete("/api/lore-packs/{pack_id}", status_code=204, tags=["lore"])
+    def delete_lore_pack(pack_id: int, _: Principal = Depends(require_admin)) -> Response:
+        """Delete a lore/fact pack and remove it from every character."""
+
+        if not database.delete_lore_pack(pack_id):
+            raise HTTPException(404, "Lore pack not found")
         return Response(status_code=204)
 
     @app.post(

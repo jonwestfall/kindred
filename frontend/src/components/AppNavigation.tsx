@@ -1,11 +1,19 @@
 import { Icon, type IconName } from "./Icon";
 
-export type ViewName = "chat" | "characters" | "activity" | "admin" | "settings" | "system";
+export type ViewName =
+  | "chat"
+  | "characters"
+  | "activity"
+  | "lore"
+  | "admin"
+  | "settings"
+  | "system";
 
 const primary: Array<{ id: ViewName; label: string; icon: IconName }> = [
   { id: "chat", label: "Chats", icon: "chat" },
   { id: "characters", label: "Characters", icon: "characters" },
   { id: "activity", label: "Activity", icon: "activity" },
+  { id: "lore", label: "Lore", icon: "activity" },
 ];
 
 const secondary: Array<{ id: ViewName; label: string; icon: IconName }> = [
@@ -49,7 +57,9 @@ export function AppNavigation({
   onNewCharacter: () => void;
   isAdmin: boolean;
 }) {
-  const visiblePrimary = isAdmin ? primary : primary.filter((item) => item.id !== "characters");
+  const visiblePrimary = isAdmin
+    ? primary
+    : primary.filter((item) => !["characters", "lore"].includes(item.id));
   const visibleSecondary = isAdmin
     ? secondary
     : secondary.filter((item) => item.id === "system");

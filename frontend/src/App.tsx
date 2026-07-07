@@ -10,6 +10,7 @@ import { ChatPage } from "./features/chat/ChatPage";
 import { CharacterForm } from "./features/characters/CharacterForm";
 import { CharactersPage } from "./features/characters/CharactersPage";
 import { ActivityPage } from "./features/activity/ActivityPage";
+import { LorePage } from "./features/lore/LorePage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { SystemPage } from "./features/system/SystemPage";
 
@@ -185,6 +186,8 @@ export default function App() {
     );
   } else if (view === "activity") {
     content = <ActivityPage characters={characters} />;
+  } else if (view === "lore" && isAdmin) {
+    content = <LorePage characters={characters} />;
   } else if (view === "admin" && isAdmin) {
     content = <AdminPage characters={characters} />;
   } else if (view === "settings" && isAdmin) {

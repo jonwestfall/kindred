@@ -53,6 +53,9 @@ for a personal service on Pi-class hardware.
   one user account.
 - `messages`: content plus timestamp, backend/model, context summary, safe
   character rationale, autonomous-message marker, and optional user owner.
+- `lore_packs`: imported fact-pack metadata for local retrieval grounding.
+- `lore_facts`: atomic facts, keywords, tags, source references, and weights.
+- `character_lore_packs`: per-character fact-pack assignments.
 - `app_settings`: JSON values by settings section.
 - `usage_logs`: cloud requests, tokens, estimated cost, task kind, dry-run.
 - `push_subscriptions`: browser Web Push subscription JSON.
@@ -84,11 +87,13 @@ Authorization rules are deliberately simple:
 
 1. The API validates and stores the user message.
 2. It loads at most 20 recent user/character messages for model context.
-3. A system prompt is assembled from profile fields and optional world notes.
-4. The character's selected adapter runs. Cloud adapters check every configured
+3. Kindred retrieves matching facts from lore packs assigned to the character.
+4. A system prompt is assembled from profile fields, optional world notes, and
+   retrieved facts.
+5. The character's selected adapter runs. Cloud adapters check every configured
    budget before dispatch.
-5. The response and safe audit metadata are stored with the thread's user owner.
-6. Open clients receive a WebSocket event; saved push subscriptions are
+6. The response and safe audit metadata are stored with the thread's user owner.
+7. Open clients receive a WebSocket event; saved push subscriptions are
    notified when Web Push is configured.
 
 If generation fails, the user message remains logged and the API returns a
@@ -129,9 +134,14 @@ FastAPI serves live OpenAPI docs at `/docs` and the schema at `/openapi.json`.
 | `GET /api/characters/export` | Admin-only portable character-card bundle download |
 | `POST /api/characters/import` | Admin-only portable character-card bundle import |
 | `GET/PATCH/DELETE /api/characters/{id}` | Character detail and mutation |
+| `GET/PUT /api/characters/{id}/lore-packs` | Admin-only lore/fact-pack assignment |
 | `POST /api/characters/{id}/duplicate` | Copy a character profile |
 | `GET /api/characters/{id}/export` | Admin-only one-character card download |
 | `POST /api/characters/{id}/avatar` | Store a local image up to 5 MB |
+| `GET /api/lore-packs` | Admin-only lore/fact-pack list |
+| `POST /api/lore-packs/import` | Admin-only lore/fact-pack import |
+| `GET/DELETE /api/lore-packs/{id}` | Admin-only lore/fact-pack detail/delete |
+| `GET /api/lore-packs/{id}/export` | Admin-only lore/fact-pack download |
 | `GET/POST /api/threads` | List or create conversation threads |
 | `GET /api/threads/{id}/messages` | Read a thread |
 | `POST /api/threads/{id}/messages` | Store user message and generate reply |

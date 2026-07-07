@@ -4,6 +4,9 @@ Kindred defaults to local inference and never downloads a model itself. Run one
 of the supported servers, then choose its backend and model in the character
 editor.
 
+For current fastest/best-experience picks by hardware class, see
+[Model recommendations](MODEL_RECOMMENDATIONS.md).
+
 ## Ollama
 
 Kindred calls `POST {OLLAMA_BASE_URL}/api/chat`.
@@ -82,4 +85,3 @@ preserves the user's message in the local log.
 
 Model files are ignored by Git. Keep them outside this repository and review
 each model's license, acceptable-use terms, provenance, and prompt template.
-
