@@ -24,6 +24,39 @@ The normal project file works the same way:
 docker compose -f docker/compose.yml up --build
 ```
 
+## Changing the HTTP port
+
+Set `KINDRED_PORT` in `.env`:
+
+```dotenv
+KINDRED_PORT=8081
+```
+
+Then restart the app.
+
+For Docker Compose, `KINDRED_PORT` is the host-side port. The container still
+listens on port `8000` internally:
+
+```text
+http://127.0.0.1:8081 -> container port 8000
+```
+
+After changing a published Docker port, recreate the container:
+
+```bash
+docker compose -f docker/compose.yml up -d --force-recreate
+```
+
+For the Tailscale example, use the same port in `tailscale serve`:
+
+```bash
+tailscale serve --https=443 localhost:8081
+```
+
+For the Caddy/domain example, you usually do not need to change
+`KINDRED_PORT`; Caddy talks to `kindred:8000` on the Compose network and only
+publishes public ports `80` and `443`.
+
 ## Add VAPID keys for Web Push
 
 Generate keys:

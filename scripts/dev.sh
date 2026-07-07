@@ -19,16 +19,25 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 ENV_ARGS=()
-if [[ -f "${KINDRED_ENV_FILE:-$ROOT/.env}" ]]; then
-  ENV_ARGS=(--env-file "${KINDRED_ENV_FILE:-$ROOT/.env}")
+ENV_FILE="${KINDRED_ENV_FILE:-$ROOT/.env}"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+  ENV_ARGS=(--env-file "$ENV_FILE")
 fi
+
+KINDRED_DEV_HOST="${KINDRED_DEV_HOST:-127.0.0.1}"
+KINDRED_PORT="${KINDRED_PORT:-8000}"
+KINDRED_API_PROXY="${KINDRED_API_PROXY:-http://127.0.0.1:$KINDRED_PORT}"
 
 (
   cd "$ROOT"
   "$ROOT/.venv/bin/uvicorn" kindred.main:app \
     --app-dir backend \
-    --host 127.0.0.1 \
-    --port 8000 \
+    --host "$KINDRED_DEV_HOST" \
+    --port "$KINDRED_PORT" \
     --reload \
     "${ENV_ARGS[@]}"
 ) &
@@ -36,10 +45,10 @@ BACKEND_PID=$!
 
 (
   cd "$ROOT/frontend"
-  npm run dev
+  KINDRED_API_PROXY="$KINDRED_API_PROXY" npm run dev
 ) &
 FRONTEND_PID=$!
 
-echo "Kindred API: http://127.0.0.1:8000/docs"
+echo "Kindred API: http://127.0.0.1:$KINDRED_PORT/docs"
 echo "Kindred web: http://127.0.0.1:5173"
 wait

@@ -7,8 +7,13 @@ npm run build
 cd "$ROOT"
 
 ENV_ARGS=()
-if [[ -f "${KINDRED_ENV_FILE:-$ROOT/.env}" ]]; then
-  ENV_ARGS=(--env-file "${KINDRED_ENV_FILE:-$ROOT/.env}")
+ENV_FILE="${KINDRED_ENV_FILE:-$ROOT/.env}"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+  ENV_ARGS=(--env-file "$ENV_FILE")
 fi
 
 exec "$ROOT/.venv/bin/uvicorn" kindred.main:app \

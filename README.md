@@ -44,6 +44,11 @@ Open `http://127.0.0.1:5173` and sign in with the administrator credentials
 from `.env`. The API and interactive OpenAPI documentation are at
 `http://127.0.0.1:8000/docs`. `scripts/dev.sh` loads `.env` automatically.
 
+To run the backend on another port, set `KINDRED_PORT` in `.env` before running
+`./scripts/dev.sh` or `./scripts/start.sh`. In Docker Compose, that same value
+controls the host-side published port, for example `KINDRED_PORT=8081` opens
+Kindred at `http://127.0.0.1:8081`.
+
 For a production-style local run, build the client and let FastAPI serve it:
 
 ```bash

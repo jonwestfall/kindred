@@ -64,9 +64,21 @@ Development with reload:
 ```
 
 - Web client: `http://127.0.0.1:5173`
-- API docs: `http://127.0.0.1:8000/docs`
+- API docs: `http://127.0.0.1:${KINDRED_PORT:-8000}/docs`
 
 Sign in with `KINDRED_ADMIN_USERNAME` and `KINDRED_ADMIN_PASSWORD` from `.env`.
+
+To use another backend port, set `KINDRED_PORT` in `.env` before running
+`./scripts/dev.sh` or `./scripts/start.sh`:
+
+```dotenv
+KINDRED_PORT=8081
+```
+
+The development web server remains on `5173`; its `/api` proxy follows
+`KINDRED_PORT`. Development mode binds the API to `127.0.0.1` by default; set
+`KINDRED_DEV_HOST=0.0.0.0` only if you intentionally want other devices to reach
+the reload server.
 
 Production-style static serving:
 
