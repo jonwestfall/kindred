@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -222,6 +223,42 @@ class Database:
                     "INSERT OR IGNORE INTO app_settings(section, value_json, updated_at) VALUES (?, ?, ?)",
                     (section, json.dumps(value), now),
                 )
+
+    def backup_to(self, target: Path) -> None:
+        """Write a consistent SQLite snapshot to target."""
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with self.connection() as source:
+            destination = sqlite3.connect(target)
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
+
+    def restore_from(self, source: Path, defaults: dict[str, Any]) -> None:
+        """Replace the SQLite database file with a validated backup file."""
+
+        self._unlink_database_files()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, self.path)
+        self.initialize(defaults)
+
+    def reset_to_defaults(
+        self,
+        defaults: dict[str, Any],
+        seed_characters: Sequence[dict[str, Any]],
+    ) -> int:
+        """Delete all local state and recreate the starting database."""
+
+        self._unlink_database_files()
+        self.initialize(defaults)
+        return self.seed_characters(seed_characters)
+
+    def _unlink_database_files(self) -> None:
+        """Remove the main SQLite file and WAL sidecars if they exist."""
+
+        for suffix in ("", "-wal", "-shm"):
+            (self.path.parent / f"{self.path.name}{suffix}").unlink(missing_ok=True)
 
     def _migrate(self, connection: sqlite3.Connection) -> None:
         """Apply tiny additive migrations for existing local databases."""

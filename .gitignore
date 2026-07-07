@@ -23,6 +23,8 @@ frontend/playwright-report/
 data/*
 !data/.gitkeep
 !data/seed/
+!data/examples/
+!data/examples/**
 backend/data/*
 *.db
 *.db-*

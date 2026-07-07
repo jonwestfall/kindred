@@ -15,6 +15,8 @@ from kindred.main import create_app
 def test_settings(database_path: Path) -> Settings:
     return Settings(
         environment="test",
+        build_number="test-build",
+        frontend_build_number="test-frontend-build",
         host="127.0.0.1",
         port=8000,
         database_path=database_path,

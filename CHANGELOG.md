@@ -38,3 +38,5 @@ versioning once the first release is tagged.
   assignment, local retrieval grounding, and model recommendation docs.
 - Optional local Ollama semantic embeddings for lore retrieval, with SQLite
   vector caching and lexical fallback.
+- System dashboard backup, restore, reset-to-defaults, version/build metadata,
+  repository link, and public-domain literary examples with lore packs.

@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import json
+import platform
+import shutil
+import sys
+import tempfile
+import zipfile
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from hmac import compare_digest as hmac_compare
+from importlib import metadata
 from pathlib import Path
 from re import sub
 from typing import Any
@@ -25,6 +31,7 @@ from fastapi import (
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.background import BackgroundTask
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -62,6 +69,7 @@ from .schemas import (
     Message,
     SessionInfo,
     SettingsUpdate,
+    SystemResetRequest,
     ThreadCreate,
     UserCreate,
     UserOut,
@@ -69,9 +77,31 @@ from .schemas import (
 )
 
 
+REPOSITORY_URL = "https://github.com/jonwestfall/kindred"
+BACKUP_SCHEMA = "kindred.backup.v1"
+
+
 def _load_json(path: Path) -> Any:
     with path.open(encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _package_version() -> str:
+    """Return the installed backend package version."""
+
+    try:
+        return metadata.version("kindred")
+    except metadata.PackageNotFoundError:
+        return "0.1.0"
+
+
+def _frontend_version() -> str:
+    """Return the frontend package version without importing Node tooling."""
+
+    package = PROJECT_ROOT / "frontend/package.json"
+    if not package.exists():
+        return "unknown"
+    return str(_load_json(package).get("version", "unknown"))
 
 
 _CHARACTER_FIELD_NAMES = set(CharacterBase.model_fields)
@@ -111,6 +141,28 @@ def _file_for_lore_pack(pack: dict[str, Any]) -> LorePackFile:
         source_reference=pack["source_reference"],
         facts=pack["facts"],
     )
+
+
+def _safe_zip_members(archive: zipfile.ZipFile) -> None:
+    """Reject absolute or parent-traversing backup entries."""
+
+    for member in archive.namelist():
+        path = Path(member)
+        if path.is_absolute() or ".." in path.parts:
+            raise HTTPException(400, "Backup contains an unsafe path")
+
+
+def _add_uploads_to_backup(archive: zipfile.ZipFile, uploads: Path) -> int:
+    """Add uploaded local files to a backup archive."""
+
+    if not uploads.exists():
+        return 0
+    count = 0
+    for path in uploads.rglob("*"):
+        if path.is_file():
+            archive.write(path, f"uploads/{path.relative_to(uploads).as_posix()}")
+            count += 1
+    return count
 
 
 def create_app(runtime_settings: Settings | None = None) -> FastAPI:
@@ -272,9 +324,25 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     async def health() -> dict[str, Any]:
         """Report process health and live backend availability."""
 
+        api_version = _package_version()
+        frontend_version = _frontend_version()
         return {
             "status": "ok",
-            "version": "0.1.0",
+            "version": api_version,
+            "repository_url": REPOSITORY_URL,
+            "api": {
+                "version": api_version,
+                "build": settings.build_number,
+            },
+            "frontend": {
+                "version": frontend_version,
+                "build": settings.frontend_build_number,
+            },
+            "runtime": {
+                "python": sys.version.split()[0],
+                "platform": platform.platform(),
+                "build": settings.build_number,
+            },
             "environment": settings.environment,
             "database": str(settings.database_path),
             "backends": await llm.backend_status(),
@@ -712,6 +780,116 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     @app.get("/api/usage", tags=["settings"])
     def usage(_: Principal = Depends(require_admin)) -> dict[str, object]:
         return RateLimiter(database).summary()
+
+    @app.get("/api/system/backup", tags=["system"])
+    def backup_system(
+        access_token: str = "",
+        authorization: str | None = Header(default=None),
+    ) -> FileResponse:
+        """Download a whole-system backup zip with SQLite and uploads."""
+
+        principal = _principal_from_download_token(access_token, authorization)
+        if not principal.is_admin:
+            raise HTTPException(403, "Administrator access required")
+        created_at = datetime.now(UTC)
+        temp_dir = Path(tempfile.mkdtemp(prefix="kindred-backup-"))
+        snapshot = temp_dir / "kindred.db"
+        archive_path = temp_dir / "kindred-backup.zip"
+        database.backup_to(snapshot)
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.write(snapshot, "database/kindred.db")
+            upload_count = _add_uploads_to_backup(archive, uploads)
+            archive.writestr(
+                "manifest.json",
+                json.dumps(
+                    {
+                        "schema": BACKUP_SCHEMA,
+                        "created_at": created_at.isoformat(),
+                        "api_version": _package_version(),
+                        "frontend_version": _frontend_version(),
+                        "build": settings.build_number,
+                        "repository_url": REPOSITORY_URL,
+                        "database": "database/kindred.db",
+                        "uploads_count": upload_count,
+                    },
+                    indent=2,
+                ),
+            )
+        timestamp = created_at.strftime("%Y%m%d-%H%M%S")
+        return FileResponse(
+            archive_path,
+            media_type="application/zip",
+            filename=f"kindred-backup-{timestamp}.zip",
+            background=BackgroundTask(lambda: shutil.rmtree(temp_dir, ignore_errors=True)),
+        )
+
+    @app.post("/api/system/restore", tags=["system"])
+    async def restore_system(
+        file: UploadFile = File(...),
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """Restore a whole-system backup zip produced by Kindred."""
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="kindred-restore-"))
+        stopped_daemon = False
+        try:
+            archive_path = temp_dir / "restore.zip"
+            with archive_path.open("wb") as handle:
+                shutil.copyfileobj(file.file, handle)
+            extract_dir = temp_dir / "extract"
+            with zipfile.ZipFile(archive_path) as archive:
+                _safe_zip_members(archive)
+                try:
+                    manifest = json.loads(archive.read("manifest.json"))
+                except (KeyError, json.JSONDecodeError) as exc:
+                    raise HTTPException(400, "Backup manifest is missing or invalid") from exc
+                if manifest.get("schema") != BACKUP_SCHEMA:
+                    raise HTTPException(400, "Backup schema is not supported")
+                if "database/kindred.db" not in archive.namelist():
+                    raise HTTPException(400, "Backup is missing database/kindred.db")
+                archive.extractall(extract_dir)
+            await daemon.stop()
+            stopped_daemon = True
+            database.restore_from(extract_dir / "database/kindred.db", defaults)
+            restored_uploads = extract_dir / "uploads"
+            if uploads.exists():
+                shutil.rmtree(uploads)
+            if restored_uploads.exists():
+                shutil.copytree(restored_uploads, uploads)
+            else:
+                uploads.mkdir(parents=True, exist_ok=True)
+            daemon.start()
+            stopped_daemon = False
+            return {"status": "restored", "manifest": manifest}
+        finally:
+            if stopped_daemon:
+                daemon.start()
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    @app.post("/api/system/reset", tags=["system"])
+    async def reset_system(
+        payload: SystemResetRequest,
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """Reset Kindred to the committed defaults and seed characters."""
+
+        stopped_daemon = False
+        try:
+            await daemon.stop()
+            stopped_daemon = True
+            seeded = database.reset_to_defaults(
+                defaults,
+                _load_json(PROJECT_ROOT / "data/seed/characters.json"),
+            )
+            if uploads.exists():
+                shutil.rmtree(uploads)
+            uploads.mkdir(parents=True, exist_ok=True)
+            daemon.start()
+            stopped_daemon = False
+            return {"status": "reset", "seeded_characters": seeded, "confirmed": payload.confirm}
+        finally:
+            if stopped_daemon:
+                daemon.start()
 
     @app.post("/api/images/generate", tags=["settings"])
     def generate_image(

@@ -29,6 +29,8 @@ cloud provider is available only when a character explicitly opts into it.
 - Import/export lore and fact packs for local retrieval augmented generation,
   then assign those packs per character. Optional local Ollama embeddings add
   semantic retrieval with SQLite vector caching.
+- Back up, restore, or reset the whole local system from the System dashboard.
+- Import rich public-domain literary example characters with matching lore.
 - Develop on Apple Silicon and deploy the same app image on ARM64 Raspberry Pi.
 
 ## Quick start on macOS
@@ -109,7 +111,7 @@ frontend/  Lightweight React/Vite web interface and service worker
 docs/      Architecture, installation, operations, and limitations
 scripts/   Development, smoke-test, test double, and key-generation helpers
 config/    Committed safe defaults
-data/      Ignored runtime data and committed example character seeds
+data/      Ignored runtime data plus committed seeds and example imports
 docker/    Multi-architecture image and Compose definition
 ```
 
@@ -129,8 +131,10 @@ uploads, or VAPID private keys.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Authentication](docs/AUTHENTICATION.md)
+- [Backup, restore, and reset](docs/BACKUP_RESTORE.md)
 - [Character cards](docs/CHARACTER_CARDS.md)
 - [Docker Compose examples](docs/DOCKER_COMPOSE.md)
+- [Example literary characters](docs/EXAMPLE_CHARACTERS.md)
 - [Lore and fact packs](docs/LORE_FACTS.md)
 - [Model recommendations](docs/MODEL_RECOMMENDATIONS.md)
 - [Install on macOS](docs/INSTALL_MAC.md)

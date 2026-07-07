@@ -196,6 +196,12 @@ class SettingsUpdate(BaseModel):
     value: dict | str
 
 
+class SystemResetRequest(BaseModel):
+    """Explicit confirmation for deleting local runtime state."""
+
+    confirm: Literal["RESET"]
+
+
 class ImageGenerationRequest(BaseModel):
     """Provider-neutral image request placeholder for the MVP."""
 

@@ -156,6 +156,9 @@ FastAPI serves live OpenAPI docs at `/docs` and the schema at `/openapi.json`.
 | `GET /api/logs/export` | Download Markdown or JSON |
 | `GET/PATCH /api/settings` | Read or update settings sections |
 | `GET /api/usage` | Current cloud usage windows and configured limits |
+| `GET /api/system/backup` | Admin-only whole-system backup zip download |
+| `POST /api/system/restore` | Admin-only whole-system restore from backup zip |
+| `POST /api/system/reset` | Admin-only reset to committed defaults and seeds |
 | `POST /api/images/generate` | Metered image-provider dry-run placeholder |
 | `GET /api/notifications/public-key` | VAPID public configuration |
 | `POST/DELETE /api/notifications/subscribe` | Manage push subscription |

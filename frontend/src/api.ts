@@ -43,6 +43,22 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function requestForm<T>(path: string, formData: FormData): Promise<T> {
+  const token = authToken.get();
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new ApiError(body.detail ?? "Request failed", response.status);
+  }
+  return response.json() as Promise<T>;
+}
+
 export const authToken = {
   get: () => window.localStorage.getItem(TOKEN_KEY) ?? "",
   set: (token: string) => window.localStorage.setItem(TOKEN_KEY, token),
@@ -128,6 +144,21 @@ export const api = {
       }),
   },
   usage: () => request<Record<string, unknown>>("/usage"),
+  system: {
+    restore: (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return requestForm<{ status: string; manifest: Record<string, unknown> }>(
+        "/system/restore",
+        formData,
+      );
+    },
+    reset: () =>
+      request<{ status: string; seeded_characters: number; confirmed: string }>("/system/reset", {
+        method: "POST",
+        body: JSON.stringify({ confirm: "RESET" }),
+      }),
+  },
   daemonRun: (characterId?: number) =>
     request<Array<Record<string, unknown>>>(
       `/daemon/run-once${characterId ? `?character_id=${characterId}` : ""}`,
@@ -175,6 +206,10 @@ export function characterExportUrl(characterId: number): string {
 
 export function lorePackExportUrl(packId: number): string {
   return `${API_BASE}/lore-packs/${packId}/export?${tokenParams()}`;
+}
+
+export function systemBackupUrl(): string {
+  return `${API_BASE}/system/backup?${tokenParams()}`;
 }
 
 export function websocketUrl(): string {

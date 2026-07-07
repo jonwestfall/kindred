@@ -107,6 +107,10 @@ export interface AppSettings {
 export interface Health {
   status: string;
   version: string;
+  repository_url: string;
+  api: { version: string; build: string };
+  frontend: { version: string; build: string };
+  runtime: { python: string; platform: string; build: string };
   database: string;
   environment: string;
   backends: Record<string, Record<string, unknown>>;

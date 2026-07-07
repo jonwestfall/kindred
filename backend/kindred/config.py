@@ -22,6 +22,8 @@ class Settings:
     """Runtime settings loaded once for each application instance."""
 
     environment: str
+    build_number: str
+    frontend_build_number: str
     host: str
     port: int
     database_path: Path
@@ -66,6 +68,11 @@ class Settings:
         )
         return cls(
             environment=os.getenv("KINDRED_ENV", "development"),
+            build_number=os.getenv("KINDRED_BUILD", "dev"),
+            frontend_build_number=os.getenv(
+                "KINDRED_FRONTEND_BUILD",
+                os.getenv("KINDRED_BUILD", "dev"),
+            ),
             host=os.getenv("KINDRED_HOST", "0.0.0.0"),
             port=int(os.getenv("KINDRED_PORT", "8000")),
             database_path=database,
