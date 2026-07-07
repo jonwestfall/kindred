@@ -14,13 +14,20 @@ test("create, chat, autonomous message, notification setup, and export", async (
   });
 
   await page.goto("/");
-  const existingResponse = await page.request.get("/api/characters");
+  await expect(page.getByRole("heading", { name: "Kindred" })).toBeVisible();
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("change-me-now");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("button", { name: "Kindred" })).toBeVisible();
+  const token = await page.evaluate(() => window.localStorage.getItem("kindred.sessionToken"));
+  const headers = { Authorization: `Bearer ${token}` };
+  const existingResponse = await page.request.get("/api/characters", { headers });
   const existingCharacters = (await existingResponse.json()) as Array<{
     id: number;
     name: string;
   }>;
   for (const character of existingCharacters.filter((item) => item.name === "Rowan Test")) {
-    await page.request.delete(`/api/characters/${character.id}`);
+    await page.request.delete(`/api/characters/${character.id}`, { headers });
   }
   await page.reload();
   consoleErrors.length = 0;
@@ -87,6 +94,9 @@ test("mobile chat remains readable and navigable", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   await page.goto("/");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("change-me-now");
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("button", { name: "Chats" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Characters" })).toBeVisible();
   expect(

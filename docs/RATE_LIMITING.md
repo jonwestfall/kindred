@@ -38,13 +38,19 @@ both anti-spam and cloud-budget gates.
 Inspect current windows in System or:
 
 ```bash
-curl http://127.0.0.1:8000/api/usage
+TOKEN="$(
+  curl -s http://127.0.0.1:8000/api/auth/login \
+    -H 'content-type: application/json' \
+    -d '{"username":"admin","password":"change-me-now"}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])'
+)"
+curl http://127.0.0.1:8000/api/usage -H "authorization: Bearer $TOKEN"
 ```
 
 ## Concurrency limitation
 
 Usage is recorded after a successful provider response. Two exactly simultaneous
 cloud requests could pass the same remaining budget before either writes usage.
-Kindred's single-user Pi deployment normally generates one request at a time. A
-future multi-user release should reserve budget transactionally before dispatch.
-
+Kindred's Pi/home-server deployment normally generates only a small number of
+requests at a time. A future hardening pass should reserve budget
+transactionally before dispatch.

@@ -1,0 +1,31 @@
+# Local one-command example.
+#
+# Usage:
+#   cp .env.example .env
+#   docker compose -f docker/compose.example.local.yml up --build
+#
+# This file intentionally mirrors compose.yml so newcomers can start here
+# without learning overlay composition first.
+services:
+  kindred:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: kindred:local
+    restart: unless-stopped
+    ports:
+      - "${KINDRED_PORT:-8000}:8000"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      KINDRED_DATABASE_PATH: /app/data/kindred.db
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      LLAMACPP_BASE_URL: ${LLAMACPP_BASE_URL:-http://host.docker.internal:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - kindred-data:/app/data
+
+volumes:
+  kindred-data:

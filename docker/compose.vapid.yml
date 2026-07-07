@@ -1,0 +1,16 @@
+# Overlay for Web Push/VAPID.
+#
+# Usage:
+#   .venv/bin/python scripts/generate_vapid_keys.py
+#   docker compose -f docker/compose.yml -f docker/compose.vapid.yml up --build
+#
+# Set VAPID_PUBLIC_KEY and VAPID_SUBJECT in .env. The private key file is
+# mounted read-only so it is not baked into the image.
+services:
+  kindred:
+    environment:
+      VAPID_PRIVATE_KEY: /run/secrets/kindred_vapid_private.pem
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+    volumes:
+      - ../config/vapid_private.pem:/run/secrets/kindred_vapid_private.pem:ro

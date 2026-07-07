@@ -5,10 +5,14 @@ import type {
   Health,
   LogRecord,
   Message,
+  SessionInfo,
   Thread,
+  UserAccount,
+  UserDraft,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+const TOKEN_KEY = "kindred.sessionToken";
 
 export class ApiError extends Error {
   constructor(
@@ -20,10 +24,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = authToken.get();
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   });
@@ -35,8 +41,33 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export const authToken = {
+  get: () => window.localStorage.getItem(TOKEN_KEY) ?? "",
+  set: (token: string) => window.localStorage.setItem(TOKEN_KEY, token),
+  clear: () => window.localStorage.removeItem(TOKEN_KEY),
+};
+
 export const api = {
+  auth: {
+    login: (username: string, password: string) =>
+      request<{ token: string; session: SessionInfo }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      }),
+    me: () => request<SessionInfo>("/auth/me"),
+  },
   health: () => request<Health>("/health"),
+  users: {
+    list: () => request<UserAccount[]>("/users"),
+    create: (draft: UserDraft & { password: string }) =>
+      request<UserAccount>("/users", { method: "POST", body: JSON.stringify(draft) }),
+    update: (id: number, draft: Partial<UserDraft>) =>
+      request<UserAccount>(`/users/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(draft),
+      }),
+    remove: (id: number) => request<void>(`/users/${id}`, { method: "DELETE" }),
+  },
   characters: {
     list: () => request<Character[]>("/characters"),
     create: (draft: CharacterDraft) =>
@@ -94,7 +125,18 @@ export function exportUrl(
   format: "markdown" | "json",
   filters: Record<string, string> = {},
 ): string {
-  const params = new URLSearchParams({ format, ...filters });
+  const token = authToken.get();
+  const params = new URLSearchParams({
+    format,
+    ...filters,
+    ...(token ? { access_token: token } : {}),
+  });
   return `${API_BASE}/logs/export?${params}`;
 }
 
+export function websocketUrl(): string {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const token = authToken.get();
+  const params = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${protocol}//${window.location.host}/api/events/ws${params}`;
+}

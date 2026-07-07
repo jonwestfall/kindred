@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from hmac import compare_digest as hmac_compare
 from pathlib import Path
 from typing import Any
 
 from fastapi import (
+    Depends,
     FastAPI,
     File,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -22,6 +25,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import (
+    Principal,
+    authenticate_request,
+    create_token,
+    hash_password,
+    parse_token,
+    require_admin,
+    verify_password,
+    websocket_token_from_header_or_query,
+)
 from .config import PROJECT_ROOT, Settings
 from .daemon import CharacterDaemon
 from .database import Database
@@ -34,9 +47,15 @@ from .schemas import (
     CharacterUpdate,
     ChatRequest,
     ImageGenerationRequest,
+    LoginRequest,
+    LoginResponse,
     Message,
+    SessionInfo,
     SettingsUpdate,
     ThreadCreate,
+    UserCreate,
+    UserOut,
+    UserUpdate,
 )
 
 
@@ -92,6 +111,114 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     async def limit_handler(_: Request, exc: LimitExceeded) -> JSONResponse:
         return JSONResponse(status_code=429, content={"detail": str(exc)})
 
+    def _include_all(principal: Principal) -> bool:
+        return principal.is_admin
+
+    def _require_character_access(character_id: int, principal: Principal) -> None:
+        if not database.get_character(character_id):
+            raise HTTPException(404, "Character not found")
+        if not database.character_is_allowed(
+            principal.user_id,
+            character_id,
+            include_all=_include_all(principal),
+        ):
+            raise HTTPException(403, "Character is not assigned to this account")
+
+    def _require_thread_access(thread_id: int, principal: Principal) -> dict[str, Any]:
+        thread = database.get_thread(thread_id)
+        if not thread:
+            raise HTTPException(404, "Thread not found")
+        if not database.thread_belongs_to_user(
+            thread_id,
+            principal.user_id,
+            include_all=_include_all(principal),
+        ):
+            raise HTTPException(403, "Thread is not available to this account")
+        return thread
+
+    def _principal_from_download_token(access_token: str, authorization: str | None) -> Principal:
+        if not settings.auth_enabled:
+            return Principal(username="local-admin", role="admin")
+        token = access_token
+        if not token and authorization and authorization.lower().startswith("bearer "):
+            token = authorization.split(" ", 1)[1]
+        if not token:
+            raise HTTPException(401, "Authentication required")
+        principal = parse_token(token, settings)
+        if not principal.is_admin:
+            user = database.get_user(principal.user_id)
+            if not user or user["disabled"]:
+                raise HTTPException(403, "Account is disabled")
+        return principal
+
+    @app.post("/api/auth/login", response_model=LoginResponse, tags=["auth"])
+    def login(payload: LoginRequest) -> dict[str, Any]:
+        """Authenticate the env-admin or a SQLite-backed regular user."""
+
+        username = payload.username.strip()
+        if (
+            hmac_compare(username, settings.admin_username)
+            and hmac_compare(payload.password, settings.admin_password)
+        ):
+            principal = Principal(username=settings.admin_username, role="admin")
+            return {
+                "token": create_token(principal, settings),
+                "session": SessionInfo(username=principal.username, role=principal.role, user_id=None),
+            }
+        user = database.get_user_by_username(username)
+        if not user or user["disabled"] or not verify_password(payload.password, user["password_hash"]):
+            raise HTTPException(401, "Invalid username or password")
+        principal = Principal(username=user["username"], role="user", user_id=user["id"])
+        return {
+            "token": create_token(principal, settings),
+            "session": SessionInfo(username=principal.username, role=principal.role, user_id=principal.user_id),
+        }
+
+    @app.get("/api/auth/me", response_model=SessionInfo, tags=["auth"])
+    def me(principal: Principal = Depends(authenticate_request)) -> dict[str, Any]:
+        return {"username": principal.username, "role": principal.role, "user_id": principal.user_id}
+
+    @app.get("/api/users", response_model=list[UserOut], tags=["admin"])
+    def list_users(_: Principal = Depends(require_admin)) -> list[dict[str, Any]]:
+        return database.list_users()
+
+    @app.post("/api/users", response_model=UserOut, status_code=201, tags=["admin"])
+    def create_user(payload: UserCreate, _: Principal = Depends(require_admin)) -> dict[str, Any]:
+        try:
+            return database.create_user(
+                username=payload.username.strip(),
+                display_name=payload.display_name.strip(),
+                password_hash=hash_password(payload.password),
+                disabled=payload.disabled,
+                character_ids=payload.character_ids,
+            )
+        except Exception as exc:
+            raise HTTPException(409, "User could not be created; username may already exist") from exc
+
+    @app.patch("/api/users/{user_id}", response_model=UserOut, tags=["admin"])
+    def update_user(
+        user_id: int,
+        payload: UserUpdate,
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        user = database.update_user(
+            user_id,
+            username=payload.username.strip() if payload.username is not None else None,
+            display_name=payload.display_name.strip() if payload.display_name is not None else None,
+            password_hash=hash_password(payload.password) if payload.password else None,
+            disabled=payload.disabled,
+            character_ids=payload.character_ids,
+        )
+        if not user:
+            raise HTTPException(404, "User not found")
+        return user
+
+    @app.delete("/api/users/{user_id}", status_code=204, tags=["admin"])
+    def delete_user(user_id: int, _: Principal = Depends(require_admin)) -> Response:
+        if not database.delete_user(user_id):
+            raise HTTPException(404, "User not found")
+        return Response(status_code=204)
+
     @app.get("/api/health", tags=["system"])
     async def health() -> dict[str, Any]:
         """Report process health and live backend availability."""
@@ -109,29 +236,37 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         }
 
     @app.get("/api/characters", response_model=list[Character], tags=["characters"])
-    def list_characters() -> list[dict[str, Any]]:
-        return database.list_characters()
+    def list_characters(principal: Principal = Depends(authenticate_request)) -> list[dict[str, Any]]:
+        return database.list_characters(principal.user_id, include_all=_include_all(principal))
 
     @app.post("/api/characters", response_model=Character, status_code=201, tags=["characters"])
-    def create_character(payload: CharacterCreate) -> dict[str, Any]:
+    def create_character(payload: CharacterCreate, _: Principal = Depends(require_admin)) -> dict[str, Any]:
         return database.create_character(payload.model_dump())
 
     @app.get("/api/characters/{character_id}", response_model=Character, tags=["characters"])
-    def get_character(character_id: int) -> dict[str, Any]:
+    def get_character(
+        character_id: int,
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, Any]:
+        _require_character_access(character_id, principal)
         character = database.get_character(character_id)
         if not character:
             raise HTTPException(404, "Character not found")
         return character
 
     @app.patch("/api/characters/{character_id}", response_model=Character, tags=["characters"])
-    def update_character(character_id: int, payload: CharacterUpdate) -> dict[str, Any]:
+    def update_character(
+        character_id: int,
+        payload: CharacterUpdate,
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, Any]:
         character = database.update_character(character_id, payload.model_dump(exclude_none=True))
         if not character:
             raise HTTPException(404, "Character not found")
         return character
 
     @app.delete("/api/characters/{character_id}", status_code=204, tags=["characters"])
-    def delete_character(character_id: int) -> Response:
+    def delete_character(character_id: int, _: Principal = Depends(require_admin)) -> Response:
         if not database.delete_character(character_id):
             raise HTTPException(404, "Character not found")
         return Response(status_code=204)
@@ -142,14 +277,18 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         status_code=201,
         tags=["characters"],
     )
-    def duplicate_character(character_id: int) -> dict[str, Any]:
+    def duplicate_character(character_id: int, _: Principal = Depends(require_admin)) -> dict[str, Any]:
         character = database.duplicate_character(character_id)
         if not character:
             raise HTTPException(404, "Character not found")
         return character
 
     @app.post("/api/characters/{character_id}/avatar", tags=["characters"])
-    async def upload_avatar(character_id: int, file: UploadFile = File(...)) -> dict[str, str]:
+    async def upload_avatar(
+        character_id: int,
+        file: UploadFile = File(...),
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, str]:
         """Save a small local avatar and update the character profile."""
 
         if not database.get_character(character_id):
@@ -172,28 +311,46 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         return {"avatar_url": url}
 
     @app.get("/api/threads", tags=["chat"])
-    def list_threads(character_id: int | None = None) -> list[dict[str, Any]]:
-        return database.list_threads(character_id)
+    def list_threads(
+        character_id: int | None = None,
+        principal: Principal = Depends(authenticate_request),
+    ) -> list[dict[str, Any]]:
+        if character_id is not None:
+            _require_character_access(character_id, principal)
+        return database.list_threads(
+            character_id,
+            user_id=principal.user_id,
+            include_all=_include_all(principal),
+        )
 
     @app.post("/api/threads", status_code=201, tags=["chat"])
-    def create_thread(payload: ThreadCreate) -> dict[str, Any]:
+    def create_thread(
+        payload: ThreadCreate,
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, Any]:
         if not database.get_character(payload.character_id):
             raise HTTPException(404, "Character not found")
-        return database.create_thread(payload.character_id, payload.title)
+        _require_character_access(payload.character_id, principal)
+        return database.create_thread(payload.character_id, payload.title, user_id=principal.user_id)
 
     @app.get("/api/threads/{thread_id}/messages", response_model=list[Message], tags=["chat"])
-    def list_messages(thread_id: int, limit: int = Query(default=200, ge=1, le=1000)):
-        if not database.get_thread(thread_id):
-            raise HTTPException(404, "Thread not found")
+    def list_messages(
+        thread_id: int,
+        limit: int = Query(default=200, ge=1, le=1000),
+        principal: Principal = Depends(authenticate_request),
+    ):
+        _require_thread_access(thread_id, principal)
         return database.list_messages(thread_id, limit)
 
     @app.post("/api/threads/{thread_id}/messages", response_model=Message, tags=["chat"])
-    async def send_message(thread_id: int, payload: ChatRequest) -> dict[str, Any]:
+    async def send_message(
+        thread_id: int,
+        payload: ChatRequest,
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, Any]:
         """Log the user message, generate one character reply, and notify clients."""
 
-        thread = database.get_thread(thread_id)
-        if not thread:
-            raise HTTPException(404, "Thread not found")
+        thread = _require_thread_access(thread_id, principal)
         character = database.get_character(thread["character_id"])
         if not character:
             raise HTTPException(404, "Character not found")
@@ -203,6 +360,7 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
             "user",
             payload.content,
             prompt_context_summary="User-authored message.",
+            user_id=thread.get("user_id"),
         )
         history = database.list_messages(thread_id, limit=40)
         try:
@@ -218,11 +376,13 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
             model=generated.model,
             prompt_context_summary=summary,
             character_rationale=rationale,
+            user_id=thread.get("user_id"),
         )
         await notifications.publish(
             {
                 "type": "character_message",
                 "message": message,
+                "user_id": thread.get("user_id"),
                 "thread_id": thread_id,
                 "character_id": character["id"],
                 "character_name": character["name"],
@@ -232,8 +392,15 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         return message
 
     @app.get("/api/messages/recent", tags=["chat"])
-    def recent_messages(limit: int = Query(default=50, ge=1, le=500)) -> list[dict[str, Any]]:
-        return database.search_logs(limit=limit)
+    def recent_messages(
+        limit: int = Query(default=50, ge=1, le=500),
+        principal: Principal = Depends(authenticate_request),
+    ) -> list[dict[str, Any]]:
+        return database.search_logs(
+            limit=limit,
+            user_id=principal.user_id,
+            include_all=_include_all(principal),
+        )
 
     @app.get("/api/logs", tags=["logs"])
     def search_logs(
@@ -242,9 +409,14 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         date_from: str = "",
         date_to: str = "",
         limit: int = Query(default=500, ge=1, le=5000),
+        principal: Principal = Depends(authenticate_request),
     ) -> list[dict[str, Any]]:
+        if character_id is not None:
+            _require_character_access(character_id, principal)
         return database.search_logs(
             character_id=character_id,
+            user_id=principal.user_id,
+            include_all=_include_all(principal),
             keyword=keyword,
             date_from=date_from,
             date_to=date_to,
@@ -258,11 +430,18 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         keyword: str = "",
         date_from: str = "",
         date_to: str = "",
+        access_token: str = "",
+        authorization: str | None = Header(default=None),
     ) -> Response:
+        principal = _principal_from_download_token(access_token, authorization)
+        if character_id is not None:
+            _require_character_access(character_id, principal)
         records = list(
             reversed(
                 database.search_logs(
                     character_id=character_id,
+                    user_id=principal.user_id,
+                    include_all=_include_all(principal),
                     keyword=keyword,
                     date_from=date_from,
                     date_to=date_to,
@@ -303,11 +482,11 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/api/settings", tags=["settings"])
-    def get_settings() -> dict[str, Any]:
+    def get_settings(_: Principal = Depends(require_admin)) -> dict[str, Any]:
         return database.get_settings()
 
     @app.patch("/api/settings", tags=["settings"])
-    def update_settings(payload: SettingsUpdate) -> dict[str, Any]:
+    def update_settings(payload: SettingsUpdate, _: Principal = Depends(require_admin)) -> dict[str, Any]:
         current = database.get_settings().get(payload.section)
         if isinstance(current, dict) and isinstance(payload.value, dict):
             value = {**current, **payload.value}
@@ -317,13 +496,18 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         return database.get_settings()
 
     @app.get("/api/usage", tags=["settings"])
-    def usage() -> dict[str, object]:
+    def usage(_: Principal = Depends(require_admin)) -> dict[str, object]:
         return RateLimiter(database).summary()
 
     @app.post("/api/images/generate", tags=["settings"])
-    def generate_image(payload: ImageGenerationRequest) -> dict[str, Any]:
+    def generate_image(
+        payload: ImageGenerationRequest,
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, Any]:
         """Meter a provider-neutral image task; live image adapters follow post-MVP."""
 
+        if payload.character_id is not None:
+            _require_character_access(payload.character_id, principal)
         limiter = RateLimiter(database)
         limiter.check_cloud(estimated_tokens=0, request_kind="image")
         dry_run = payload.dry_run or settings.cloud_dry_run
@@ -347,30 +531,50 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         }
 
     @app.get("/api/notifications/public-key", tags=["notifications"])
-    def notification_public_key() -> dict[str, Any]:
+    def notification_public_key(_: Principal = Depends(authenticate_request)) -> dict[str, Any]:
         return {
             "public_key": settings.vapid_public_key,
             "web_push_configured": bool(settings.vapid_private_key and settings.vapid_public_key),
         }
 
     @app.post("/api/notifications/subscribe", status_code=201, tags=["notifications"])
-    async def subscribe(request: Request) -> dict[str, str]:
+    async def subscribe(
+        request: Request,
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, str]:
         subscription = await request.json()
         try:
-            database.save_subscription(subscription)
+            database.save_subscription(subscription, user_id=principal.user_id)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         return {"status": "subscribed"}
 
     @app.delete("/api/notifications/subscribe", status_code=204, tags=["notifications"])
-    async def unsubscribe(request: Request) -> Response:
+    async def unsubscribe(
+        request: Request,
+        _: Principal = Depends(authenticate_request),
+    ) -> Response:
         body = await request.json()
         database.delete_subscription(body.get("endpoint", ""))
         return Response(status_code=204)
 
     @app.websocket("/api/events/ws")
-    async def event_socket(socket: WebSocket) -> None:
-        await notifications.connect(socket)
+    async def event_socket(socket: WebSocket, token: str | None = None) -> None:
+        try:
+            principal = websocket_token_from_header_or_query(
+                socket.headers.get("authorization"),
+                token,
+                settings,
+            )
+            if not principal.is_admin:
+                user = database.get_user(principal.user_id)
+                if not user or user["disabled"]:
+                    await socket.close(code=1008)
+                    return
+        except HTTPException:
+            await socket.close(code=1008)
+            return
+        await notifications.connect(socket, principal)
         try:
             while True:
                 await socket.receive_text()
@@ -378,7 +582,10 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
             notifications.disconnect(socket)
 
     @app.post("/api/daemon/run-once", tags=["daemon"])
-    async def run_daemon_once(character_id: int | None = None) -> list[dict[str, Any]]:
+    async def run_daemon_once(
+        character_id: int | None = None,
+        _: Principal = Depends(require_admin),
+    ) -> list[dict[str, Any]]:
         """Run one decision cycle; character_id forces a message for smoke testing."""
 
         return await daemon.run_once(force_character_id=character_id)

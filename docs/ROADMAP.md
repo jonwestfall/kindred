@@ -16,7 +16,8 @@
 ## 0.2 — hardening
 
 - Versioned SQLite migrations and backup/restore UI
-- Authentication suitable for trusted-LAN multi-device access
+- Auth hardening: CSRF defenses, HttpOnly-cookie option, password policy hints,
+  and clearer session/device management
 - CSRF protection for subscription and mutation endpoints
 - Atomic cloud-budget reservation for concurrent requests
 - Streaming model responses with cancellation
@@ -38,7 +39,7 @@
 ## Later
 
 - Optional external worker for multi-process scheduling
-- Multi-user profiles and encrypted-at-rest data
+- Per-user profile preferences and encrypted-at-rest data
 - Progressive Web App offline shell and queued sending
 - Additional local runtimes and provider-specific cloud adapters
 - Plugin hooks with explicit permissions
@@ -50,4 +51,3 @@
 - Storage or display of hidden chain-of-thought
 - Bundling model files in the repository or application image
 - Making a cloud account necessary for core chat
-

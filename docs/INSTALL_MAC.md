@@ -20,6 +20,7 @@ runtime extension beyond optional Web Push cryptography wheels.
 git clone <your-kindred-repository-url>
 cd kindred
 cp .env.example .env
+# Edit KINDRED_ADMIN_PASSWORD and KINDRED_SESSION_SECRET in .env.
 python3 -m venv .venv
 .venv/bin/pip install -e './backend[dev,notifications]'
 cd frontend
@@ -65,6 +66,8 @@ Development with reload:
 - Web client: `http://127.0.0.1:5173`
 - API docs: `http://127.0.0.1:8000/docs`
 
+Sign in with `KINDRED_ADMIN_USERNAME` and `KINDRED_ADMIN_PASSWORD` from `.env`.
+
 Production-style static serving:
 
 ```bash
@@ -84,6 +87,9 @@ docker compose -f docker/compose.yml up --build
 If Ollama runs on the Mac host, Compose reaches it through
 `host.docker.internal`.
 
+See [Docker Compose examples](DOCKER_COMPOSE.md) for VAPID, custom-domain, and
+Tailscale Serve examples.
+
 ## Verification
 
 ```bash
@@ -97,4 +103,3 @@ does, check `.env`, the provider port, and macOS firewall prompts.
 `http://localhost` is accepted as a secure context by modern browsers for
 development, but another device opening your Mac's LAN IP needs HTTPS for
 service workers and Web Push. Follow [Notifications](NOTIFICATIONS.md).
-

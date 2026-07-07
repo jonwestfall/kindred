@@ -22,6 +22,8 @@ cloud provider is available only when a character explicitly opts into it.
   rationale—never hidden model chain-of-thought.
 - Opt into an OpenAI-compatible provider with request, token, spend, and image
   limits checked before dispatch. Cloud dry-run is on by default.
+- Sign in with an env-backed administrator account, manage regular local users,
+  assign character access, and let admins view/export all chats.
 - Develop on Apple Silicon and deploy the same app image on ARM64 Raspberry Pi.
 
 ## Quick start on macOS
@@ -30,6 +32,7 @@ Prerequisites: Python 3.11+, Node 22+, and either Ollama or `llama-server`.
 
 ```bash
 cp .env.example .env
+# edit KINDRED_ADMIN_PASSWORD and KINDRED_SESSION_SECRET before sharing Kindred
 python3 -m venv .venv
 .venv/bin/pip install -e './backend[dev,notifications]'
 cd frontend && npm install && cd ..
@@ -37,8 +40,9 @@ ollama pull llama3.2:1b
 ./scripts/dev.sh
 ```
 
-Open `http://127.0.0.1:5173`. The API and interactive OpenAPI documentation are
-at `http://127.0.0.1:8000/docs`. `scripts/dev.sh` loads `.env` automatically.
+Open `http://127.0.0.1:5173` and sign in with the administrator credentials
+from `.env`. The API and interactive OpenAPI documentation are at
+`http://127.0.0.1:8000/docs`. `scripts/dev.sh` loads `.env` automatically.
 
 For a production-style local run, build the client and let FastAPI serve it:
 
@@ -61,7 +65,8 @@ docker compose -f docker/compose.yml up --build
 
 The SQLite database, uploads, subscriptions, usage records, and logs live in the
 `kindred-data` volume. See [Raspberry Pi installation](docs/INSTALL_RASPBERRY_PI.md)
-before exposing port 8000 on a LAN.
+before exposing port 8000 on a LAN. See [Docker Compose examples](docs/DOCKER_COMPOSE.md)
+for VAPID, custom-domain, and Tailscale Serve variants.
 
 ## Tests
 
@@ -72,9 +77,10 @@ before exposing port 8000 on a LAN.
 The deterministic browser flow uses a tiny Ollama-shaped test server:
 
 ```bash
-python3 scripts/mock_ollama.py
+MOCK_OLLAMA_PORT=11436 python3 scripts/mock_ollama.py
 KINDRED_DATABASE_PATH=/tmp/kindred-e2e.db \
   KINDRED_DAEMON_ENABLED=false \
+  OLLAMA_BASE_URL=http://127.0.0.1:11436 \
   .venv/bin/uvicorn kindred.main:app --app-dir backend
 cd frontend && npm run test:e2e
 ```
@@ -103,14 +109,17 @@ Copy `.env.example` to `.env`. Character profiles, messages, usage records, and
 settings are stored in `data/kindred.db` by default. Avatars uploaded through
 the API live under `data/uploads/`. Both paths are ignored by Git.
 
-Kindred has no authentication in this MVP. Treat it like a personal home
-service: bind it only to trusted interfaces, put HTTPS and authentication in a
-reverse proxy before wider network exposure, and never commit `.env`, model
-files, database files, uploads, or VAPID private keys.
+Kindred includes local authentication. The administrator account is configured
+in `.env`; regular user accounts and character grants live in SQLite. Treat it
+like a personal home service: keep HTTPS enabled for shared networks, use strong
+local credentials, and never commit `.env`, model files, database files,
+uploads, or VAPID private keys.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Authentication](docs/AUTHENTICATION.md)
+- [Docker Compose examples](docs/DOCKER_COMPOSE.md)
 - [Install on macOS](docs/INSTALL_MAC.md)
 - [Install on Raspberry Pi](docs/INSTALL_RASPBERRY_PI.md)
 - [Local models](docs/LOCAL_MODELS.md)

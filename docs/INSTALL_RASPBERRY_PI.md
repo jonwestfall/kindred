@@ -24,12 +24,14 @@ rather than piping an unreviewed installer into a shell.
 git clone <your-kindred-repository-url>
 cd kindred
 cp .env.example .env
+# Edit KINDRED_ADMIN_PASSWORD and KINDRED_SESSION_SECRET in .env.
 docker compose -f docker/compose.yml up -d --build
 docker compose -f docker/compose.yml logs -f kindred
 ```
 
-Open `http://PI_ADDRESS:8000` from a trusted LAN device. Compose maps host model
-ports through `host.docker.internal` and stores app data in a named volume.
+Open `http://PI_ADDRESS:8000` from a trusted LAN device and sign in with the
+administrator credentials from `.env`. Compose maps host model ports through
+`host.docker.internal` and stores app data in a named volume.
 
 ## Install Ollama on ARM64
 
@@ -98,7 +100,8 @@ copy that generated directory to the Pi before starting Uvicorn.
 
 ## LAN and HTTPS
 
-The MVP has no authentication. Firewall port 8000 to the trusted LAN only.
-Browser notifications on `http://PI_ADDRESS:8000` are normally blocked because
-LAN IPs are not secure contexts. See [Notifications](NOTIFICATIONS.md).
-
+Kindred has local authentication, but you should still firewall port 8000 to a
+trusted LAN or bind it behind Tailscale/reverse proxy HTTPS. Browser
+notifications on `http://PI_ADDRESS:8000` are normally blocked because LAN IPs
+are not secure contexts. See [Notifications](NOTIFICATIONS.md) and
+[Docker Compose examples](DOCKER_COMPOSE.md).

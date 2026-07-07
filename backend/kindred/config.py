@@ -39,6 +39,11 @@ class Settings:
     vapid_private_key: str
     vapid_public_key: str
     vapid_subject: str
+    auth_enabled: bool
+    admin_username: str
+    admin_password: str
+    session_secret: str
+    session_hours: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -74,5 +79,9 @@ class Settings:
             vapid_private_key=os.getenv("VAPID_PRIVATE_KEY", ""),
             vapid_public_key=os.getenv("VAPID_PUBLIC_KEY", ""),
             vapid_subject=os.getenv("VAPID_SUBJECT", "mailto:admin@example.com"),
+            auth_enabled=_bool("KINDRED_AUTH_ENABLED", True),
+            admin_username=os.getenv("KINDRED_ADMIN_USERNAME", "admin"),
+            admin_password=os.getenv("KINDRED_ADMIN_PASSWORD", "change-me-now"),
+            session_secret=os.getenv("KINDRED_SESSION_SECRET", "kindred-dev-session-secret-change-me"),
+            session_hours=max(1, int(os.getenv("KINDRED_SESSION_HOURS", "168"))),
         )
-

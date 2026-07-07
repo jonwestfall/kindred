@@ -81,3 +81,26 @@ export interface Health {
   daemon: { process_enabled: boolean; settings: Record<string, unknown> };
 }
 
+export interface SessionInfo {
+  username: string;
+  role: "admin" | "user";
+  user_id: number | null;
+}
+
+export interface UserAccount {
+  id: number;
+  username: string;
+  display_name: string;
+  disabled: boolean;
+  character_ids: number[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserDraft {
+  username: string;
+  display_name: string;
+  password?: string;
+  disabled: boolean;
+  character_ids: number[];
+}

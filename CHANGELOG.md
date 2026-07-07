@@ -27,3 +27,8 @@ versioning once the first release is tagged.
   scripts, VAPID key generation, and complete macOS/Raspberry Pi documentation.
 - Preflight cloud spend checks that reject a request before it would cross the
   configured ceiling.
+- Local authentication with an env-backed administrator, SQLite regular users,
+  disabled-account enforcement, per-user character access, account-aware chat
+  logs/exports, and an Admin dashboard.
+- Docker Compose examples for local startup, VAPID key mounting, public-domain
+  Caddy reverse proxying, and Tailscale Serve HTTPS deployment.

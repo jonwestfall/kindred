@@ -9,9 +9,11 @@ from typing import Any
 
 from fastapi import WebSocket
 
+from .auth import Principal
 from .config import Settings
 from .database import Database
 
+_MISSING = object()
 
 @dataclass(slots=True)
 class NotificationService:
@@ -19,20 +21,25 @@ class NotificationService:
 
     settings: Settings
     database: Database
-    sockets: set[WebSocket] = field(default_factory=set)
+    sockets: dict[WebSocket, Principal] = field(default_factory=dict)
 
-    async def connect(self, socket: WebSocket) -> None:
+    async def connect(self, socket: WebSocket, principal: Principal) -> None:
         await socket.accept()
-        self.sockets.add(socket)
+        self.sockets[socket] = principal
 
     def disconnect(self, socket: WebSocket) -> None:
-        self.sockets.discard(socket)
+        self.sockets.pop(socket, None)
 
     async def publish(self, event: dict[str, Any]) -> None:
         """Broadcast immediately, then attempt Web Push without blocking chat."""
 
         stale: list[WebSocket] = []
-        for socket in list(self.sockets):
+        target_user_id = event.get("user_id", _MISSING)
+        for socket, principal in list(self.sockets.items()):
+            if target_user_id is not _MISSING and not (
+                principal.is_admin or principal.user_id == target_user_id
+            ):
+                continue
             try:
                 await socket.send_json(event)
             except Exception:
@@ -58,7 +65,13 @@ class NotificationService:
                 "url": f"/?thread={event.get('thread_id', '')}",
             }
         )
-        for subscription in self.database.list_subscriptions():
+        target_user_id = event.get("user_id", _MISSING)
+        subscriptions = (
+            self.database.list_subscriptions(target_user_id)
+            if target_user_id is not _MISSING
+            else self.database.list_subscriptions()
+        )
+        for subscription in subscriptions:
             try:
                 webpush(
                     subscription_info=subscription,

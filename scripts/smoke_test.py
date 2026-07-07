@@ -4,17 +4,21 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
 
 
 BASE = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://127.0.0.1:8000"
+TOKEN = ""
 
 
 def request(path: str, method: str = "GET", body: dict | None = None):
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Content-Type": "application/json"} if data else {}
+    if TOKEN:
+        headers["Authorization"] = f"Bearer {TOKEN}"
     with urllib.request.urlopen(
         urllib.request.Request(f"{BASE}{path}", data=data, headers=headers, method=method),
         timeout=10,
@@ -23,7 +27,17 @@ def request(path: str, method: str = "GET", body: dict | None = None):
 
 
 def main() -> int:
+    global TOKEN
     try:
+        _, session = request(
+            "/api/auth/login",
+            "POST",
+            {
+                "username": os.getenv("KINDRED_ADMIN_USERNAME", "admin"),
+                "password": os.getenv("KINDRED_ADMIN_PASSWORD", "change-me-now"),
+            },
+        )
+        TOKEN = session["token"]
         status, health = request("/api/health")
         assert status == 200 and health["status"] == "ok"
         _, characters = request("/api/characters")
@@ -47,4 +61,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

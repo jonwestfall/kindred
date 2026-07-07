@@ -151,37 +151,43 @@ class CharacterDaemon:
             )
             result = {"character_id": character["id"], "initiate": decision.initiate, "note": decision.note}
             if decision.initiate:
-                thread = self.database.get_or_create_thread(character["id"])
-                history = self.database.list_messages(thread["id"], limit=40)
+                messages: list[dict[str, Any]] = []
                 try:
-                    generated, context_summary, rationale = await self.llm.respond(
-                        character, history, proactive=True
-                    )
-                    message = self.database.add_message(
-                        thread["id"],
-                        character["id"],
-                        "character",
-                        generated.content,
-                        backend=generated.backend,
-                        model=generated.model,
-                        prompt_context_summary=context_summary,
-                        character_rationale=rationale,
-                        initiated=True,
-                    )
+                    for user_id in self.database.daemon_recipient_user_ids(character["id"]):
+                        thread = self.database.get_or_create_thread(character["id"], user_id=user_id)
+                        history = self.database.list_messages(thread["id"], limit=40)
+                        generated, context_summary, rationale = await self.llm.respond(
+                            character, history, proactive=True
+                        )
+                        message = self.database.add_message(
+                            thread["id"],
+                            character["id"],
+                            "character",
+                            generated.content,
+                            backend=generated.backend,
+                            model=generated.model,
+                            prompt_context_summary=context_summary,
+                            character_rationale=rationale,
+                            initiated=True,
+                            user_id=user_id,
+                        )
+                        await self.notifications.publish(
+                            {
+                                "type": "character_message",
+                                "message": message,
+                                "user_id": user_id,
+                                "thread_id": thread["id"],
+                                "character_id": character["id"],
+                                "character_name": character["name"],
+                                "content": generated.content,
+                            }
+                        )
+                        messages.append(message)
                     self.database.set_daemon_state(
                         character["id"], checked_at=now, initiated_at=now, note=decision.note
                     )
-                    await self.notifications.publish(
-                        {
-                            "type": "character_message",
-                            "message": message,
-                            "thread_id": thread["id"],
-                            "character_id": character["id"],
-                            "character_name": character["name"],
-                            "content": generated.content,
-                        }
-                    )
-                    result["message"] = message
+                    result["messages"] = messages
+                    result["message_count"] = len(messages)
                 except BackendUnavailable as exc:
                     result["initiate"] = False
                     result["note"] = f"{decision.note}; generation skipped: {exc}"
@@ -194,4 +200,3 @@ class CharacterDaemon:
                 )
             results.append(result)
         return results
-

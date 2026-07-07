@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ApiError, api } from "./api";
-import type { Character, CharacterDraft, Health, Message, Thread } from "./types";
+import { ApiError, api, authToken, websocketUrl } from "./api";
+import type { Character, CharacterDraft, Health, Message, SessionInfo, Thread } from "./types";
 import { AppNavigation, type ViewName } from "./components/AppNavigation";
+import { LoginScreen } from "./components/LoginScreen";
 import { NotificationButton } from "./components/NotificationButton";
+import { AdminPage } from "./features/admin/AdminPage";
 import { ChatPage } from "./features/chat/ChatPage";
 import { CharacterForm } from "./features/characters/CharacterForm";
 import { CharactersPage } from "./features/characters/CharactersPage";
@@ -12,6 +14,8 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { SystemPage } from "./features/system/SystemPage";
 
 export default function App() {
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [view, setView] = useState<ViewName>("chat");
   const [characters, setCharacters] = useState<Character[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -21,6 +25,7 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [editing, setEditing] = useState<Character | "new" | null>(null);
   const [error, setError] = useState("");
+  const isAdmin = session?.role === "admin";
 
   const refreshBase = useCallback(async () => {
     const [nextCharacters, nextThreads] = await Promise.all([
@@ -39,13 +44,30 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    Promise.all([refreshBase(), api.health().then(setHealth)]).catch((caught) => {
-      setError(caught instanceof Error ? caught.message : "Kindred could not load.");
-    });
-  }, [refreshBase]);
+    api.auth
+      .me()
+      .then(setSession)
+      .catch(() => {
+        authToken.clear();
+        setSession(null);
+      })
+      .finally(() => setAuthChecked(true));
+  }, []);
 
   useEffect(() => {
-    if (!selectedThread) {
+    if (!session) return;
+    Promise.all([refreshBase(), api.health().then(setHealth)]).catch((caught) => {
+      if (caught instanceof ApiError && caught.status === 401) {
+        authToken.clear();
+        setSession(null);
+        return;
+      }
+      setError(caught instanceof Error ? caught.message : "Kindred could not load.");
+    });
+  }, [refreshBase, session]);
+
+  useEffect(() => {
+    if (!session || !selectedThread) {
       setMessages([]);
       return;
     }
@@ -55,14 +77,14 @@ export default function App() {
       .then(setMessages)
       .catch((caught) => setError(caught instanceof Error ? caught.message : "Messages failed."))
       .finally(() => setMessagesLoading(false));
-  }, [selectedThread?.id]);
+  }, [selectedThread?.id, session]);
 
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    if (!session) return;
     let socket: WebSocket | null = null;
     let retry: number | undefined;
     const connect = () => {
-      socket = new WebSocket(`${protocol}//${window.location.host}/api/events/ws`);
+      socket = new WebSocket(websocketUrl());
       socket.onmessage = (event) => {
         const payload = JSON.parse(event.data) as {
           type: string;
@@ -93,7 +115,7 @@ export default function App() {
       if (retry) window.clearTimeout(retry);
       socket?.close();
     };
-  }, [refreshBase, selectedThread?.id]);
+  }, [refreshBase, selectedThread?.id, session]);
 
   const localReady = useMemo(
     () =>
@@ -138,7 +160,7 @@ export default function App() {
         onMessageSent={reloadSelected}
       />
     );
-  } else if (view === "characters") {
+  } else if (view === "characters" && isAdmin) {
     content = (
       <CharactersPage
         characters={characters}
@@ -158,10 +180,20 @@ export default function App() {
     );
   } else if (view === "activity") {
     content = <ActivityPage characters={characters} />;
-  } else if (view === "settings") {
+  } else if (view === "admin" && isAdmin) {
+    content = <AdminPage characters={characters} />;
+  } else if (view === "settings" && isAdmin) {
     content = <SettingsPage characters={characters} />;
   } else {
     content = <SystemPage />;
+  }
+
+  if (!authChecked) {
+    return <p className="empty-copy page-loading">Opening Kindred…</p>;
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={setSession} />;
   }
 
   return (
@@ -171,6 +203,7 @@ export default function App() {
         onChange={setView}
         localReady={localReady}
         onNewCharacter={() => setEditing("new")}
+        isAdmin={isAdmin}
       />
       <main className="main-area">
         <div className="topbar">
@@ -178,7 +211,19 @@ export default function App() {
             {view === "chat" ? "Conversations" : view[0].toUpperCase() + view.slice(1)}
           </div>
           <NotificationButton />
-          <div className="user-mark">Local</div>
+          <button
+            className="user-mark user-mark-button"
+            type="button"
+            onClick={() => {
+              authToken.clear();
+              setSession(null);
+              setSelectedThread(null);
+              setMessages([]);
+            }}
+            title={`Signed in as ${session.username}. Click to sign out.`}
+          >
+            {session.role === "admin" ? "Admin" : session.username.slice(0, 2).toUpperCase()}
+          </button>
         </div>
         {error ? (
           <div className="global-error" role="alert">
@@ -200,4 +245,3 @@ export default function App() {
     </div>
   );
 }
-

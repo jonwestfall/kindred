@@ -109,3 +109,57 @@ class ImageGenerationRequest(BaseModel):
     provider: str = "openai_compatible"
     dry_run: bool = True
 
+
+class LoginRequest(BaseModel):
+    """Username/password login request."""
+
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=500)
+
+
+class SessionInfo(BaseModel):
+    """Authenticated session metadata returned to the frontend."""
+
+    username: str
+    role: Literal["admin", "user"]
+    user_id: int | None = None
+
+
+class LoginResponse(BaseModel):
+    """Bearer token and user-facing session info."""
+
+    token: str
+    session: SessionInfo
+
+
+class UserCreate(BaseModel):
+    """Administrator-created local user account."""
+
+    username: str = Field(min_length=1, max_length=120)
+    display_name: str = Field(default="", max_length=200)
+    password: str = Field(min_length=8, max_length=500)
+    disabled: bool = False
+    character_ids: list[int] = Field(default_factory=list)
+
+
+class UserUpdate(BaseModel):
+    """Partial local user account update."""
+
+    model_config = ConfigDict(extra="forbid")
+    username: str | None = Field(default=None, min_length=1, max_length=120)
+    display_name: str | None = Field(default=None, max_length=200)
+    password: str | None = Field(default=None, min_length=8, max_length=500)
+    disabled: bool | None = None
+    character_ids: list[int] | None = None
+
+
+class UserOut(BaseModel):
+    """Regular local user account without password material."""
+
+    id: int
+    username: str
+    display_name: str
+    disabled: bool
+    character_ids: list[int]
+    created_at: datetime
+    updated_at: datetime

@@ -1,6 +1,6 @@
 import { Icon, type IconName } from "./Icon";
 
-export type ViewName = "chat" | "characters" | "activity" | "settings" | "system";
+export type ViewName = "chat" | "characters" | "activity" | "admin" | "settings" | "system";
 
 const primary: Array<{ id: ViewName; label: string; icon: IconName }> = [
   { id: "chat", label: "Chats", icon: "chat" },
@@ -9,6 +9,7 @@ const primary: Array<{ id: ViewName; label: string; icon: IconName }> = [
 ];
 
 const secondary: Array<{ id: ViewName; label: string; icon: IconName }> = [
+  { id: "admin", label: "Admin", icon: "system" },
   { id: "settings", label: "Settings", icon: "settings" },
   { id: "system", label: "System", icon: "system" },
 ];
@@ -40,12 +41,18 @@ export function AppNavigation({
   onChange,
   localReady,
   onNewCharacter,
+  isAdmin,
 }: {
   active: ViewName;
   onChange: (view: ViewName) => void;
   localReady: boolean;
   onNewCharacter: () => void;
+  isAdmin: boolean;
 }) {
+  const visiblePrimary = isAdmin ? primary : primary.filter((item) => item.id !== "characters");
+  const visibleSecondary = isAdmin
+    ? secondary
+    : secondary.filter((item) => item.id === "system");
   return (
     <aside className="app-nav">
       <button className="brand" type="button" onClick={() => onChange("chat")}>
@@ -53,15 +60,17 @@ export function AppNavigation({
         <span>Kindred</span>
       </button>
       <nav aria-label="Main navigation">
-        <NavGroup items={primary} active={active} onChange={onChange} />
+        <NavGroup items={visiblePrimary} active={active} onChange={onChange} />
         <div className="nav-divider" />
-        <NavGroup items={secondary} active={active} onChange={onChange} />
+        <NavGroup items={visibleSecondary} active={active} onChange={onChange} />
       </nav>
       <div className="nav-footer">
-        <button className="new-character-nav" type="button" onClick={onNewCharacter}>
-          <Icon name="plus" size={17} />
-          <span>New character</span>
-        </button>
+        {isAdmin ? (
+          <button className="new-character-nav" type="button" onClick={onNewCharacter}>
+            <Icon name="plus" size={17} />
+            <span>New character</span>
+          </button>
+        ) : null}
         <div className="local-status">
           <span className={`status-dot ${localReady ? "is-ready" : ""}`} />
           <div>
@@ -73,4 +82,3 @@ export function AppNavigation({
     </aside>
   );
 }
-

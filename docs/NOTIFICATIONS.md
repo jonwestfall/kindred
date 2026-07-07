@@ -13,8 +13,9 @@ service worker and a secure context.
 
 Click the bell in the top bar or Settings → Notifications. Kindred requests
 permission, registers `/sw.js`, fetches the VAPID public key, and stores a push
-subscription when VAPID is configured. Without VAPID it enables in-tab browser
-alerts and explains that background push is unavailable.
+subscription for the signed-in account when VAPID is configured. Without VAPID
+it enables in-tab browser alerts and explains that background push is
+unavailable.
 
 Permission may be denied permanently for an origin. Reset it in browser site
 settings before retrying.
@@ -34,6 +35,13 @@ VAPID_SUBJECT=mailto:you@example.com
 ```
 
 In Docker, mount the PEM read-only and use its container path.
+
+```bash
+docker compose \
+  -f docker/compose.yml \
+  -f docker/compose.vapid.yml \
+  up --build
+```
 
 ## Secure-context limitation
 
@@ -62,8 +70,29 @@ kindred.home.arpa {
 ```
 
 Add the hostname to local DNS, generate a certificate with a local CA such as
-`mkcert`, and install that CA on each device. Do not expose the unauthenticated
-MVP publicly merely to obtain HTTPS.
+`mkcert`, and install that CA on each device. Keep Kindred authentication
+enabled and use strong credentials before exposing it beyond localhost.
+
+Kindred also ships a Caddy example for public DNS names:
+
+```bash
+KINDRED_DOMAIN=kindred.example.com ACME_EMAIL=you@example.com \
+docker compose \
+  -f docker/compose.yml \
+  -f docker/compose.domain.yml \
+  up --build
+```
+
+For Tailscale HTTPS names, run Kindred on localhost and let the host Tailscale
+daemon publish it:
+
+```bash
+docker compose -f docker/compose.tailscale.yml up --build
+tailscale serve --https=443 localhost:${KINDRED_PORT:-8000}
+```
+
+Tailscale Serve terminates HTTPS with a tailnet name such as
+`https://kindred.example-tail.ts.net/` and proxies to the local Docker port.
 
 ## Privacy and limitations
 
@@ -78,4 +107,3 @@ with your privacy requirements.
 - Expired subscriptions are removed after a push endpoint returns `404`/`410`;
   click the bell again to subscribe.
 - iOS/iPadOS behavior can require adding the site to the Home Screen.
-

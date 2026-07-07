@@ -16,6 +16,7 @@ small.
 
 ```bash
 cp .env.example .env
+# Edit KINDRED_ADMIN_PASSWORD and KINDRED_SESSION_SECRET if testing auth manually.
 python3 -m venv .venv
 .venv/bin/pip install -e './backend[dev,notifications]'
 cd frontend && npm install && cd ..
@@ -38,6 +39,11 @@ cd frontend && npm run build
 The API app factory accepts an explicit `Settings` object, allowing tests to use
 isolated temporary databases and disable the scheduler.
 
+Most backend tests set `KINDRED_AUTH_ENABLED=false` through test settings for
+legacy route coverage. Auth-specific tests run with authentication enabled and
+verify administrator login, user creation, character grants, and disabled-user
+revocation.
+
 ## Browser tests
 
 Build the production bundle, then run an isolated app and deterministic model
@@ -45,9 +51,12 @@ double:
 
 ```bash
 cd frontend && npm run build && cd ..
-python3 scripts/mock_ollama.py
+MOCK_OLLAMA_PORT=11436 python3 scripts/mock_ollama.py
 KINDRED_DATABASE_PATH=/tmp/kindred-e2e.db \
 KINDRED_DAEMON_ENABLED=false \
+KINDRED_ADMIN_USERNAME=admin \
+KINDRED_ADMIN_PASSWORD=change-me-now \
+OLLAMA_BASE_URL=http://127.0.0.1:11436 \
   .venv/bin/uvicorn kindred.main:app --app-dir backend
 ```
 
@@ -103,4 +112,3 @@ review and redaction.
 Run `git diff --check`, backend tests, frontend build, and the relevant browser
 flow before submitting. Never commit `.env`, SQLite databases, uploads, API
 keys, PEM files, model weights, generated logs, Playwright reports, or builds.
-

@@ -1,0 +1,33 @@
+# Overlay for serving Kindred on your own HTTPS domain with Caddy.
+#
+# Usage:
+#   KINDRED_DOMAIN=kindred.example.com ACME_EMAIL=you@example.com \
+#     docker compose -f docker/compose.yml -f docker/compose.domain.yml up --build
+#
+# DNS for KINDRED_DOMAIN must point at this host. Caddy will request and renew
+# public certificates automatically when ports 80/443 are reachable.
+services:
+  kindred:
+    ports: !reset []
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - kindred
+    environment:
+      KINDRED_DOMAIN: ${KINDRED_DOMAIN:?Set KINDRED_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

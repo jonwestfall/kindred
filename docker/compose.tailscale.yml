@@ -1,0 +1,31 @@
+# Standalone example for Tailscale Serve.
+#
+# Usage:
+#   docker compose -f docker/compose.tailscale.yml up --build
+#   tailscale serve --https=443 localhost:${KINDRED_PORT:-8000}
+#
+# The app is bound to 127.0.0.1 on the host; Tailscale Serve publishes the
+# HTTPS tailnet URL such as https://kindred.yak-bebop.ts.net/.
+services:
+  kindred:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: kindred:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${KINDRED_PORT:-8000}:8000"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      KINDRED_DATABASE_PATH: /app/data/kindred.db
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      LLAMACPP_BASE_URL: ${LLAMACPP_BASE_URL:-http://host.docker.internal:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - kindred-data:/app/data
+
+volumes:
+  kindred-data:

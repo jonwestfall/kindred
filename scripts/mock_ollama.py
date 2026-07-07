@@ -8,6 +8,7 @@ never imported by the production application.
 from __future__ import annotations
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -55,5 +56,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    ThreadingHTTPServer(("127.0.0.1", 11434), Handler).serve_forever()
-
+    port = int(os.getenv("MOCK_OLLAMA_PORT", "11434"))
+    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

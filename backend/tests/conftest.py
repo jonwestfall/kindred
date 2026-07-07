@@ -32,6 +32,11 @@ def test_settings(database_path: Path) -> Settings:
         vapid_private_key="",
         vapid_public_key="",
         vapid_subject="mailto:test@example.com",
+        auth_enabled=False,
+        admin_username="admin",
+        admin_password="test-password",
+        session_secret="test-session-secret",
+        session_hours=24,
     )
 
 
@@ -66,4 +71,3 @@ def client(tmp_path: Path) -> TestClient:
     app = create_app(test_settings(tmp_path / "api-test.db"))
     with TestClient(app) as test_client:
         yield test_client
-
