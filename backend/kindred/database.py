@@ -128,6 +128,18 @@ CREATE TABLE IF NOT EXISTS lore_facts (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_lore_facts_pack ON lore_facts(pack_id);
+CREATE TABLE IF NOT EXISTS lore_fact_embeddings (
+    fact_id INTEGER NOT NULL REFERENCES lore_facts(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    dimensions INTEGER NOT NULL,
+    vector_json TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(fact_id, provider, model)
+);
+CREATE INDEX IF NOT EXISTS idx_lore_fact_embeddings_model
+    ON lore_fact_embeddings(provider, model);
 CREATE TABLE IF NOT EXISTS character_lore_packs (
     character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
     pack_id INTEGER NOT NULL REFERENCES lore_packs(id) ON DELETE CASCADE,
@@ -432,22 +444,10 @@ class Database:
         adapters later.
         """
 
-        pack_ids = self.list_character_lore_pack_ids(character_id)
-        if not pack_ids:
-            return []
-        placeholders = ",".join("?" for _ in pack_ids)
-        with self.connection() as connection:
-            rows = connection.execute(
-                f"""SELECT f.*, p.name AS pack_name
-                    FROM lore_facts f
-                    JOIN lore_packs p ON p.id = f.pack_id
-                    WHERE f.pack_id IN ({placeholders})""",
-                tuple(pack_ids),
-            ).fetchall()
+        facts = self.list_lore_facts_for_character(character_id)
         query_tokens = _tokens(query)
         ranked: list[tuple[float, dict[str, Any]]] = []
-        for row in rows:
-            fact = self._decode_lore_fact(row)
+        for fact in facts:
             title_tokens = _tokens(fact["title"])
             content_tokens = _tokens(fact["content"])
             keyword_tokens = _tokens(" ".join(fact["keywords"] + fact["tags"]))
@@ -464,6 +464,74 @@ class Database:
                 ranked.append((weighted, fact))
         ranked.sort(key=lambda item: (item[0], item[1]["weight"], item[1]["id"]), reverse=True)
         return [fact for _, fact in ranked[:limit]]
+
+    def list_lore_facts_for_character(self, character_id: int) -> list[dict[str, Any]]:
+        """Return decoded lore facts assigned to one character."""
+
+        pack_ids = self.list_character_lore_pack_ids(character_id)
+        if not pack_ids:
+            return []
+        placeholders = ",".join("?" for _ in pack_ids)
+        with self.connection() as connection:
+            rows = connection.execute(
+                f"""SELECT f.*, p.name AS pack_name
+                    FROM lore_facts f
+                    JOIN lore_packs p ON p.id = f.pack_id
+                    WHERE f.pack_id IN ({placeholders})
+                    ORDER BY f.weight DESC, f.id""",
+                tuple(pack_ids),
+            ).fetchall()
+        return [self._decode_lore_fact(row) for row in rows]
+
+    def get_lore_embedding(
+        self,
+        *,
+        fact_id: int,
+        provider: str,
+        model: str,
+        content_hash: str,
+    ) -> list[float] | None:
+        """Fetch a cached lore fact embedding when it matches current text."""
+
+        with self.connection() as connection:
+            row = connection.execute(
+                """SELECT vector_json FROM lore_fact_embeddings
+                   WHERE fact_id = ? AND provider = ? AND model = ? AND content_hash = ?""",
+                (fact_id, provider, model, content_hash),
+            ).fetchone()
+        return json.loads(row["vector_json"]) if row else None
+
+    def upsert_lore_embedding(
+        self,
+        *,
+        fact_id: int,
+        provider: str,
+        model: str,
+        vector: Sequence[float],
+        content_hash: str,
+    ) -> None:
+        """Cache or refresh one lore fact embedding."""
+
+        with self.connection() as connection:
+            connection.execute(
+                """INSERT INTO lore_fact_embeddings(
+                    fact_id, provider, model, dimensions, vector_json, content_hash, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(fact_id, provider, model) DO UPDATE SET
+                    dimensions = excluded.dimensions,
+                    vector_json = excluded.vector_json,
+                    content_hash = excluded.content_hash,
+                    updated_at = excluded.updated_at""",
+                (
+                    fact_id,
+                    provider,
+                    model,
+                    len(vector),
+                    json.dumps([float(value) for value in vector]),
+                    content_hash,
+                    iso(),
+                ),
+            )
 
     def _decode_lore_fact(self, row: sqlite3.Row) -> dict[str, Any]:
         """Decode SQLite JSON columns from a lore_facts row."""

@@ -17,8 +17,10 @@ FastAPI process
   ├─ character daemon
   ├─ notification fan-out
   ├─ cloud limiter/usage ledger
+  ├─ optional SQLite embedding cache for lore facts
   └─ model adapter
         ├─ Ollama /api/chat (default, local)
+        ├─ Ollama /api/embed (optional local embeddings)
         ├─ llama.cpp /v1/chat/completions (local)
         └─ OpenAI-compatible /chat/completions (optional cloud)
 ```
@@ -55,6 +57,7 @@ for a personal service on Pi-class hardware.
   character rationale, autonomous-message marker, and optional user owner.
 - `lore_packs`: imported fact-pack metadata for local retrieval grounding.
 - `lore_facts`: atomic facts, keywords, tags, source references, and weights.
+- `lore_fact_embeddings`: optional cached vectors for semantic lore retrieval.
 - `character_lore_packs`: per-character fact-pack assignments.
 - `app_settings`: JSON values by settings section.
 - `usage_logs`: cloud requests, tokens, estimated cost, task kind, dry-run.
@@ -88,6 +91,9 @@ Authorization rules are deliberately simple:
 1. The API validates and stores the user message.
 2. It loads at most 20 recent user/character messages for model context.
 3. Kindred retrieves matching facts from lore packs assigned to the character.
+   If semantic embeddings are enabled, Kindred lazily caches local Ollama
+   embeddings in SQLite and ranks by cosine similarity; otherwise it uses the
+   dependency-free lexical scorer.
 4. A system prompt is assembled from profile fields, optional world notes, and
    retrieved facts.
 5. The character's selected adapter runs. Cloud adapters check every configured

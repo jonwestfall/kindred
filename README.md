@@ -27,7 +27,8 @@ cloud provider is available only when a character explicitly opts into it.
 - Import/export portable JSON character cards for trading, backup, and
   LLM-assisted character creation.
 - Import/export lore and fact packs for local retrieval augmented generation,
-  then assign those packs per character.
+  then assign those packs per character. Optional local Ollama embeddings add
+  semantic retrieval with SQLite vector caching.
 - Develop on Apple Silicon and deploy the same app image on ARM64 Raspberry Pi.
 
 ## Quick start on macOS

@@ -36,3 +36,5 @@ versioning once the first release is tagged.
   trading, and LLM-generated character-card creation.
 - Portable `kindred.fact_pack.v1` lore/fact-pack import/export, per-character
   assignment, local retrieval grounding, and model recommendation docs.
+- Optional local Ollama semantic embeddings for lore retrieval, with SQLite
+  vector caching and lexical fallback.

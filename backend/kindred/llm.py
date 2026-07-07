@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any
 
 import httpx
@@ -21,6 +23,43 @@ def approximate_tokens(text: str) -> int:
     """Use a deliberately conservative character-based token estimate."""
 
     return max(1, (len(text) + 3) // 4)
+
+
+def lore_embedding_text(fact: dict[str, Any]) -> str:
+    """Build the stable text that represents a fact in the embedding cache."""
+
+    keywords = ", ".join(fact.get("keywords", []))
+    tags = ", ".join(fact.get("tags", []))
+    return "\n".join(
+        part
+        for part in (
+            f"Title: {fact.get('title', '')}",
+            f"Fact: {fact.get('content', '')}",
+            f"Keywords: {keywords}" if keywords else "",
+            f"Tags: {tags}" if tags else "",
+            f"Source: {fact.get('source_reference', '')}" if fact.get("source_reference") else "",
+        )
+        if part
+    )
+
+
+def text_hash(value: str) -> str:
+    """Return a content hash for invalidating stale embedding rows."""
+
+    return sha256(value.encode("utf-8")).hexdigest()
+
+
+def cosine_similarity(left: list[float], right: list[float]) -> float:
+    """Compute cosine similarity without pulling in a numeric dependency."""
+
+    if not left or len(left) != len(right):
+        return 0.0
+    dot = sum(a * b for a, b in zip(left, right, strict=True))
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if not left_norm or not right_norm:
+        return 0.0
+    return dot / (left_norm * right_norm)
 
 
 def _lore_section(facts: list[dict[str, Any]]) -> str:
@@ -120,14 +159,14 @@ class LLMService:
                 *(item["content"] for item in context[-8:]),
             ]
         )
-        retrieved_lore = self.database.search_lore(character["id"], lore_query, limit=6)
+        retrieved_lore, retrieval_mode = await self._retrieve_lore(character["id"], lore_query, limit=6)
         base_prompt = system_prompt(character, world_notes, retrieved_lore)
         messages = [{"role": "system", "content": base_prompt}, *context]
         prompt_text = "\n".join(item["content"] for item in messages)
         summary = (
             f"Character profile + {len(context)} recent message(s)"
             f" + world notes: {'yes' if world_notes else 'no'}"
-            f" + retrieved lore facts: {len(retrieved_lore)}."
+            f" + retrieved lore facts: {len(retrieved_lore)} ({retrieval_mode})."
         )
         rationale = (
             "Autonomous check-in based on profile, elapsed time, recent conversation, and relevant lore."
@@ -158,6 +197,115 @@ class LLMService:
         else:
             raise BackendUnavailable(f"Unsupported backend: {backend}")
         return result, summary, rationale
+
+    async def _retrieve_lore(
+        self,
+        character_id: int,
+        query: str,
+        *,
+        limit: int,
+    ) -> tuple[list[dict[str, Any]], str]:
+        """Retrieve character lore with semantic search when configured.
+
+        Embeddings are an optional local enhancement. If Ollama embeddings are
+        disabled, unavailable, or misconfigured, lexical retrieval remains the
+        safe fallback so chat generation still works.
+        """
+
+        lexical = self.database.search_lore(character_id, query, limit=limit)
+        if not self.settings.embeddings_enabled:
+            return lexical, "lexical"
+        if self.settings.embeddings_provider != "ollama":
+            return lexical, f"lexical fallback: unsupported embeddings provider {self.settings.embeddings_provider}"
+        try:
+            semantic = await self._semantic_lore(character_id, query, lexical, limit=limit)
+        except BackendUnavailable:
+            return lexical, "lexical fallback: embeddings unavailable"
+        if not semantic:
+            return lexical, "lexical fallback: no semantic matches"
+        return semantic, "semantic embeddings"
+
+    async def _semantic_lore(
+        self,
+        character_id: int,
+        query: str,
+        lexical: list[dict[str, Any]],
+        *,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Rank assigned lore facts by cached Ollama embeddings."""
+
+        facts = self.database.list_lore_facts_for_character(character_id)
+        if not facts:
+            return []
+
+        provider = self.settings.embeddings_provider
+        model = self.settings.embeddings_model
+        vectors: dict[int, list[float]] = {}
+        missing: list[tuple[dict[str, Any], str, str]] = []
+        for fact in facts:
+            embedding_text = lore_embedding_text(fact)
+            content_hash = text_hash(
+                f"{provider}\n{model}\n{self.settings.embeddings_dimensions}\n{embedding_text}"
+            )
+            vector = self.database.get_lore_embedding(
+                fact_id=fact["id"],
+                provider=provider,
+                model=model,
+                content_hash=content_hash,
+            )
+            if vector is None:
+                missing.append((fact, embedding_text, content_hash))
+            else:
+                vectors[fact["id"]] = vector
+
+        for start in range(0, len(missing), 24):
+            chunk = missing[start : start + 24]
+            embedded = await self._ollama_embed([item[1] for item in chunk])
+            for (fact, _, content_hash), vector in zip(chunk, embedded, strict=True):
+                self.database.upsert_lore_embedding(
+                    fact_id=fact["id"],
+                    provider=provider,
+                    model=model,
+                    vector=vector,
+                    content_hash=content_hash,
+                )
+                vectors[fact["id"]] = vector
+
+        query_vector = (await self._ollama_embed([query]))[0]
+        lexical_rank = {fact["id"]: index for index, fact in enumerate(lexical)}
+        ranked: list[tuple[float, dict[str, Any]]] = []
+        for fact in facts:
+            vector = vectors.get(fact["id"])
+            if vector is None:
+                continue
+            lexical_boost = 0.05 if fact["id"] in lexical_rank else 0.0
+            score = (cosine_similarity(query_vector, vector) * float(fact["weight"])) + lexical_boost
+            ranked.append((score, fact))
+        ranked.sort(key=lambda item: (item[0], item[1]["weight"], item[1]["id"]), reverse=True)
+        return [fact for _, fact in ranked[:limit]]
+
+    async def _ollama_embed(self, inputs: list[str]) -> list[list[float]]:
+        """Call Ollama's local `/api/embed` endpoint."""
+
+        payload: dict[str, Any] = {
+            "model": self.settings.embeddings_model,
+            "input": inputs,
+            "truncate": True,
+        }
+        if self.settings.embeddings_dimensions:
+            payload["dimensions"] = self.settings.embeddings_dimensions
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(f"{self.settings.ollama_base_url}/api/embed", json=payload)
+                response.raise_for_status()
+                data = response.json()
+        except (httpx.HTTPError, json.JSONDecodeError, KeyError) as exc:
+            raise BackendUnavailable(f"Ollama embeddings are unavailable: {exc}") from exc
+        embeddings = data.get("embeddings")
+        if not isinstance(embeddings, list) or len(embeddings) != len(inputs):
+            raise BackendUnavailable("Ollama returned an unexpected embeddings response")
+        return [[float(value) for value in vector] for vector in embeddings]
 
     async def _ollama(
         self,
@@ -295,6 +443,14 @@ class LLMService:
                 "available": ollama_ready,
                 "detail": ollama_detail,
                 "url": self.settings.ollama_base_url,
+            },
+            "embeddings": {
+                "enabled": self.settings.embeddings_enabled,
+                "configured": self.settings.embeddings_enabled,
+                "provider": self.settings.embeddings_provider,
+                "model": self.settings.embeddings_model,
+                "dimensions": self.settings.embeddings_dimensions or "model default",
+                "url": f"{self.settings.ollama_base_url}/api/embed",
             },
             "llamacpp": {
                 "available": llama_ready,

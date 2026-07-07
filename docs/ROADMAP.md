@@ -12,6 +12,7 @@
 - Backend, smoke, and desktop/mobile end-to-end tests
 - macOS and Raspberry Pi deployment paths
 - Dry-run image-provider interface placeholder
+- Portable fact packs with optional local semantic embedding retrieval
 
 ## 0.2 — hardening
 
@@ -24,6 +25,7 @@
 - Notification subscription management and delivery diagnostics
 - Daemon run history and next-window explanation in the UI
 - Per-character thread rename, archive, and deletion controls
+- Manual lore re-indexing and embedding health diagnostics
 - Keyboard, screen-reader, contrast, and motion accessibility audit
 
 ## 0.3 — richer writing and research
@@ -32,7 +34,6 @@
 - Source citations and a research mode separating evidence from invention
 - Import/export of portable character cards
 - Configurable summarization for long threads
-- Local embeddings adapter
 - Side-by-side writer notebook and conversation
 - Live image-provider adapters behind the existing metered interface
 

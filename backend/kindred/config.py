@@ -31,6 +31,10 @@ class Settings:
     timezone: str
     ollama_base_url: str
     ollama_model: str
+    embeddings_enabled: bool
+    embeddings_provider: str
+    embeddings_model: str
+    embeddings_dimensions: int
     llamacpp_base_url: str
     cloud_base_url: str
     cloud_api_key: str
@@ -71,6 +75,10 @@ class Settings:
             timezone=os.getenv("KINDRED_TIMEZONE", "America/Chicago"),
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/"),
             ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2:1b"),
+            embeddings_enabled=_bool("KINDRED_EMBEDDINGS_ENABLED", False),
+            embeddings_provider=os.getenv("KINDRED_EMBEDDINGS_PROVIDER", "ollama"),
+            embeddings_model=os.getenv("KINDRED_EMBEDDINGS_MODEL", "all-minilm"),
+            embeddings_dimensions=max(0, int(os.getenv("KINDRED_EMBEDDINGS_DIMENSIONS", "0"))),
             llamacpp_base_url=os.getenv("LLAMACPP_BASE_URL", "http://127.0.0.1:8080").rstrip("/"),
             cloud_base_url=os.getenv("OPENAI_COMPATIBLE_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
             cloud_api_key=os.getenv("OPENAI_API_KEY", ""),

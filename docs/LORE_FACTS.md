@@ -2,7 +2,9 @@
 
 Kindred supports lightweight retrieval augmented generation through local lore files, also called fact packs. A fact pack is a JSON file of small, source-aware facts that can be assigned to one or more characters.
 
-The MVP retrieval engine is local and dependency-free: Kindred searches assigned facts with a simple lexical scorer, injects the top matches into the character prompt, and logs how many facts were used in the message audit summary. It does not require embeddings, a vector database, or a cloud service.
+The default retrieval engine is local and dependency-free: Kindred searches assigned facts with a simple lexical scorer, injects the top matches into the character prompt, and logs how many facts were used in the message audit summary. It does not require embeddings, a vector database, or a cloud service.
+
+Kindred can also use an optional semantic embedding store. When enabled, it calls a local Ollama embedding model, caches fact vectors in SQLite, ranks facts by cosine similarity, and falls back to lexical retrieval if embeddings are unavailable.
 
 ## When to use fact packs
 
@@ -68,6 +70,34 @@ See [fact_pack.schema.json](fact_pack.schema.json) for the machine-readable sche
 
 All lore-management routes are administrator-only.
 
+## Optional semantic embeddings
+
+Semantic retrieval is useful when user language does not share keywords with the fact file. For example, a query about a "family home" may retrieve a fact about "Eld House" even if the words do not overlap.
+
+The implementation stays local-first:
+
+- embeddings are disabled by default;
+- the only MVP provider is local Ollama;
+- vectors are cached in SQLite in `lore_fact_embeddings`;
+- cached vectors are refreshed when fact text, provider, model, or configured dimensions change;
+- chat falls back to lexical retrieval if Ollama embeddings fail.
+
+Example setup using Ollama's small [`all-minilm`](https://ollama.com/library/all-minilm) embedding model:
+
+```bash
+ollama pull all-minilm
+```
+
+```dotenv
+KINDRED_EMBEDDINGS_ENABLED=true
+KINDRED_EMBEDDINGS_PROVIDER=ollama
+KINDRED_EMBEDDINGS_MODEL=all-minilm
+# 0 means "use the model default". Set a positive value only for models that support it.
+KINDRED_EMBEDDINGS_DIMENSIONS=0
+```
+
+Kindred uses Ollama's [`/api/embed`](https://docs.ollama.com/api/embed) endpoint. The first chat after enabling embeddings may be slower because Kindred lazily embeds the assigned facts for that character. Later chats reuse the SQLite cache.
+
 ## LLM prompt for generating a Kindred fact pack
 
 Use this when you want an LLM to produce an importable file directly. Replace the bracketed material with the source notes or a lawful summary. For copyrighted books, provide your own notes/summaries and ask for paraphrased facts rather than copied prose.
@@ -115,7 +145,7 @@ Source notes or summary to transform:
 
 ## Practical limitations
 
-- Retrieval is lexical in the MVP. Include obvious keywords and aliases to improve matches.
-- There is no semantic embedding store yet. If you ask about "the old manor" but every fact says "Eld House", include both terms in keywords.
+- Lexical retrieval remains the safe fallback. Include obvious keywords and aliases even when embeddings are enabled.
+- Semantic retrieval currently supports Ollama only. Cloud embeddings are deliberately not wired into the MVP because lore retrieval should remain local by default.
 - Facts are sent to whichever backend the character uses. If a character is configured for a cloud backend, retrieved facts are included in that cloud prompt.
 - Fact packs are local SQLite records after import. Export them when you want backups or tradeable files.

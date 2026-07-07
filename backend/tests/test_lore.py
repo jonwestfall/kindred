@@ -1,5 +1,10 @@
 """Lore/fact-pack import, assignment, export, and retrieval coverage."""
 
+from dataclasses import replace
+
+import pytest
+
+from kindred.llm import LLMService
 from kindred.llm import system_prompt
 
 
@@ -98,3 +103,52 @@ def test_system_prompt_includes_retrieved_lore_without_reasoning():
     assert "Relevant lore/facts" in prompt
     assert "The lantern roads fade at dawn." in prompt
     assert "Do not reveal hidden reasoning" in prompt
+
+
+@pytest.mark.asyncio
+async def test_semantic_lore_retrieval_caches_embeddings(client, monkeypatch):
+    character = client.post(
+        "/api/characters",
+        json={
+            "name": "Ada Semantic",
+            "description": "A practical cartographer.",
+            "backend": "ollama",
+            "model": "llama3.2:1b",
+            "temperature": 0.7,
+            "initiative_frequency": 1,
+            "cooldown_minutes": 240,
+        },
+    ).json()
+    pack = client.post("/api/lore-packs/import", json=FACT_PACK).json()
+    client.put(f"/api/characters/{character['id']}/lore-packs", json={"pack_ids": [pack["id"]]})
+
+    settings = replace(
+        client.app.state.settings,
+        embeddings_enabled=True,
+        embeddings_model="test-embed",
+    )
+    service = LLMService(settings, client.app.state.database)
+
+    async def fake_embed(inputs: list[str]) -> list[list[float]]:
+        vectors = []
+        for value in inputs:
+            lowered = value.lower()
+            if "show doubt" in lowered or "blue pin" in lowered or "uncertain routes" in lowered:
+                vectors.append([0.0, 1.0])
+            else:
+                vectors.append([1.0, 0.0])
+        return vectors
+
+    monkeypatch.setattr(service, "_ollama_embed", fake_embed)
+
+    retrieved, mode = await service._retrieve_lore(
+        character["id"],
+        "How does Ada show doubt on a map?",
+        limit=1,
+    )
+
+    assert mode == "semantic embeddings"
+    assert retrieved[0]["title"] == "Cartographer habit"
+    with client.app.state.database.connection() as connection:
+        count = connection.execute("SELECT COUNT(*) FROM lore_fact_embeddings").fetchone()[0]
+    assert count == 2

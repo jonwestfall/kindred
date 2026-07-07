@@ -24,6 +24,30 @@ ollama serve
 The character's model field is sent as Ollama's model name. The global
 `OLLAMA_MODEL` is used only if that field is empty.
 
+## Optional Ollama embeddings
+
+Kindred can use Ollama's [`/api/embed`](https://docs.ollama.com/api/embed)
+endpoint for semantic lore/fact-pack retrieval. This is off by default and only
+affects lore retrieval; chat generation still uses the character's selected
+backend/model.
+
+```bash
+ollama pull all-minilm
+```
+
+```dotenv
+KINDRED_EMBEDDINGS_ENABLED=true
+KINDRED_EMBEDDINGS_PROVIDER=ollama
+KINDRED_EMBEDDINGS_MODEL=all-minilm
+KINDRED_EMBEDDINGS_DIMENSIONS=0
+```
+
+The [`all-minilm`](https://ollama.com/library/all-minilm) model is small enough
+to be a practical default for local embedding experiments. Kindred stores fact
+vectors in SQLite and falls back to lexical retrieval if embeddings are
+unavailable. On Raspberry Pi hardware, keep fact packs focused because first-use
+indexing is CPU work.
+
 ## llama.cpp
 
 llama.cpp describes Apple Silicon as a first-class target and provides a
