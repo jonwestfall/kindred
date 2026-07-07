@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, api, authToken, websocketUrl } from "./api";
 import type { Character, CharacterDraft, Health, Message, SessionInfo, Thread } from "./types";
@@ -14,6 +14,33 @@ import { LorePage } from "./features/lore/LorePage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { SystemPage } from "./features/system/SystemPage";
 
+interface CharacterMessageEvent {
+  type: "character_message";
+  thread_id: number;
+  character_id: number;
+  character_name: string;
+  content: string;
+}
+
+interface ToastMessage {
+  id: number;
+  title: string;
+  body: string;
+  threadId: number;
+}
+
+function isCharacterMessageEvent(value: unknown): value is CharacterMessageEvent {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.type === "character_message" &&
+    typeof candidate.thread_id === "number" &&
+    typeof candidate.character_id === "number" &&
+    typeof candidate.character_name === "string" &&
+    typeof candidate.content === "string"
+  );
+}
+
 export default function App() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -26,6 +53,9 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [editing, setEditing] = useState<Character | "new" | null>(null);
   const [error, setError] = useState("");
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const selectedThreadIdRef = useRef<number | null>(null);
+  const toastIdRef = useRef(0);
   const isAdmin = session?.role === "admin";
 
   const refreshBase = useCallback(async () => {
@@ -81,22 +111,60 @@ export default function App() {
   }, [selectedThread?.id, session]);
 
   useEffect(() => {
+    selectedThreadIdRef.current = selectedThread?.id ?? null;
+  }, [selectedThread?.id]);
+
+  const showToast = useCallback((payload: CharacterMessageEvent) => {
+    const id = toastIdRef.current + 1;
+    toastIdRef.current = id;
+    setToasts((current) => [
+      ...current.slice(-2),
+      {
+        id,
+        title: payload.character_name,
+        body: payload.content,
+        threadId: payload.thread_id,
+      },
+    ]);
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 7000);
+  }, []);
+
+  const openToastThread = useCallback(
+    async (threadId: number) => {
+      let thread = threads.find((candidate) => candidate.id === threadId);
+      if (!thread) {
+        const nextThreads = await api.threads.list();
+        setThreads(nextThreads);
+        thread = nextThreads.find((candidate) => candidate.id === threadId);
+      }
+      if (thread) {
+        setSelectedThread(thread);
+        setView("chat");
+      }
+    },
+    [threads],
+  );
+
+  useEffect(() => {
     if (!session) return;
     let socket: WebSocket | null = null;
     let retry: number | undefined;
+    let closedByEffect = false;
     const connect = () => {
       socket = new WebSocket(websocketUrl());
       socket.onmessage = (event) => {
-        const payload = JSON.parse(event.data) as {
-          type: string;
-          thread_id: number;
-          character_name: string;
-          content: string;
-        };
-        if (payload.type === "character_message") {
+        const payload = JSON.parse(event.data) as unknown;
+        if (isCharacterMessageEvent(payload)) {
+          showToast(payload);
           void refreshBase();
-          if (payload.thread_id === selectedThread?.id) {
-            api.threads.messages(payload.thread_id).then(setMessages);
+          if (payload.thread_id === selectedThreadIdRef.current) {
+            api.threads.messages(payload.thread_id).then((nextMessages) => {
+              if (payload.thread_id === selectedThreadIdRef.current) {
+                setMessages(nextMessages);
+              }
+            });
           }
           if (
             "Notification" in window &&
@@ -108,15 +176,18 @@ export default function App() {
         }
       };
       socket.onclose = () => {
-        retry = window.setTimeout(connect, 5000);
+        if (!closedByEffect) {
+          retry = window.setTimeout(connect, 5000);
+        }
       };
     };
     connect();
     return () => {
+      closedByEffect = true;
       if (retry) window.clearTimeout(retry);
       socket?.close();
     };
-  }, [refreshBase, selectedThread?.id, session]);
+  }, [refreshBase, session, showToast]);
 
   const localReady = useMemo(
     () =>
@@ -243,6 +314,32 @@ export default function App() {
         ) : null}
         {content}
       </main>
+      {toasts.length ? (
+        <div className="toast-region" aria-live="polite" aria-label="Character messages">
+          {toasts.map((toast) => (
+            <article className="message-toast" key={toast.id}>
+              <div>
+                <strong>{toast.title}</strong>
+                <p>{toast.body}</p>
+              </div>
+              <div className="toast-actions">
+                <button type="button" onClick={() => void openToastThread(toast.threadId)}>
+                  Open
+                </button>
+                <button
+                  type="button"
+                  aria-label="Dismiss notification"
+                  onClick={() =>
+                    setToasts((current) => current.filter((item) => item.id !== toast.id))
+                  }
+                >
+                  ×
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
       {editing ? (
         <CharacterForm
           character={editing === "new" ? undefined : editing}
