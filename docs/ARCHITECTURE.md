@@ -162,6 +162,7 @@ FastAPI serves live OpenAPI docs at `/docs` and the schema at `/openapi.json`.
 | `POST /api/images/generate` | Metered image-provider dry-run placeholder |
 | `GET /api/notifications/public-key` | VAPID public configuration |
 | `POST/DELETE /api/notifications/subscribe` | Manage push subscription |
+| `POST /api/notifications/test` | Send a logged delivery-test character message to the current account |
 | `WS /api/events/ws` | Live character-message events |
 | `POST /api/daemon/run-once` | Run one scheduler cycle or forced character |
 

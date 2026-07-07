@@ -9,6 +9,9 @@ Kindred uses two delivery paths:
 WebSocket delivery remains useful on plain HTTP. Background Web Push requires a
 service worker and a secure context.
 
+For a step-by-step Admin/API/iPhone test plan, see
+[Notification testing](NOTIFICATION_TESTING.md).
+
 ## Browser permission flow
 
 Click the bell in the top bar or Settings → Notifications. Kindred requests
@@ -106,4 +109,5 @@ with your privacy requirements.
 - Confirm `window.isSecureContext` is true.
 - Expired subscriptions are removed after a push endpoint returns `404`/`410`;
   click the bell again to subscribe.
-- iOS/iPadOS behavior can require adding the site to the Home Screen.
+- iOS/iPadOS Web Push is intended for Home Screen web apps; add Kindred to the
+  Home Screen from the HTTPS origin, launch that icon, and subscribe there.

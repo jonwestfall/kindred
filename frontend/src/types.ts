@@ -79,6 +79,14 @@ export interface Message {
   initiated: boolean;
 }
 
+export interface NotificationTestResult {
+  status: "sent";
+  web_push_configured: boolean;
+  subscription_count: number;
+  thread_id: number;
+  message: Message;
+}
+
 export interface LogRecord extends Message {
   character_name: string;
   thread_title: string;

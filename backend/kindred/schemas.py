@@ -189,6 +189,23 @@ class Message(BaseModel):
     initiated: bool
 
 
+class NotificationTestRequest(BaseModel):
+    """Request a logged test character message for this account's notification route."""
+
+    character_id: int
+    content: str | None = Field(default=None, max_length=500)
+
+
+class NotificationTestResult(BaseModel):
+    """Delivery-test metadata returned after publishing a test notification."""
+
+    status: Literal["sent"]
+    web_push_configured: bool
+    subscription_count: int
+    thread_id: int
+    message: Message
+
+
 class SettingsUpdate(BaseModel):
     """A shallow patch to one persisted settings section."""
 

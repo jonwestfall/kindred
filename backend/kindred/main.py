@@ -67,6 +67,8 @@ from .schemas import (
     LoginRequest,
     LoginResponse,
     Message,
+    NotificationTestRequest,
+    NotificationTestResult,
     SessionInfo,
     SettingsUpdate,
     SystemResetRequest,
@@ -949,6 +951,65 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         body = await request.json()
         database.delete_subscription(body.get("endpoint", ""))
         return Response(status_code=204)
+
+    @app.post(
+        "/api/notifications/test",
+        response_model=NotificationTestResult,
+        tags=["notifications"],
+    )
+    async def test_notification(
+        payload: NotificationTestRequest,
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, Any]:
+        """Publish a logged character-message event to the signed-in account.
+
+        This intentionally exercises the same WebSocket and Web Push fan-out as
+        real character messages, but it does not call the LLM. Use
+        `/api/daemon/run-once` when testing the full autonomous generation path.
+        """
+
+        character = database.get_character(payload.character_id)
+        if not character:
+            raise HTTPException(404, "Character not found")
+        _require_character_access(payload.character_id, principal)
+        thread = database.get_or_create_thread(character["id"], user_id=principal.user_id)
+        content = (
+            payload.content.strip()
+            if payload.content and payload.content.strip()
+            else f"Kindred notification test from {character['name']}."
+        )
+        message = database.add_message(
+            thread["id"],
+            character["id"],
+            "character",
+            content,
+            backend="kindred",
+            model="notification-test",
+            prompt_context_summary="Manual notification delivery test; no model prompt was sent.",
+            character_rationale=(
+                "This message was created by the notification test endpoint to verify delivery."
+            ),
+            initiated=True,
+            user_id=principal.user_id,
+        )
+        await notifications.publish(
+            {
+                "type": "character_message",
+                "message": message,
+                "user_id": principal.user_id,
+                "thread_id": thread["id"],
+                "character_id": character["id"],
+                "character_name": character["name"],
+                "content": content,
+            }
+        )
+        return {
+            "status": "sent",
+            "web_push_configured": bool(settings.vapid_private_key and settings.vapid_public_key),
+            "subscription_count": len(database.list_subscriptions(principal.user_id)),
+            "thread_id": thread["id"],
+            "message": message,
+        }
 
     @app.websocket("/api/events/ws")
     async def event_socket(socket: WebSocket, token: str | None = None) -> None:

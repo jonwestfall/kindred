@@ -7,6 +7,7 @@ import type {
   LorePack,
   LogRecord,
   Message,
+  NotificationTestResult,
   SessionInfo,
   Thread,
   UserAccount,
@@ -172,6 +173,11 @@ export const api = {
     request<{ status: string }>("/notifications/subscribe", {
       method: "POST",
       body: JSON.stringify(subscription),
+    }),
+  testNotification: (characterId: number, content?: string) =>
+    request<NotificationTestResult>("/notifications/test", {
+      method: "POST",
+      body: JSON.stringify({ character_id: characterId, content }),
     }),
 };
 

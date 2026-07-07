@@ -71,6 +71,21 @@ The suite verifies character creation, chat, forced autonomous initiation,
 notification setup fallback, activity, JSON download, console health, and a
 390×844 viewport.
 
+## Notification tests
+
+For a running HTTPS/VAPID deployment, use the dependency-free notification smoke
+script:
+
+```bash
+KINDRED_ADMIN_USERNAME=admin \
+KINDRED_ADMIN_PASSWORD='your-password' \
+python3 scripts/test_notifications.py https://your-machine.your-tailnet.ts.net
+```
+
+Add `--daemon` to force the real autonomous generation route after the delivery
+test. See [Notification testing](NOTIFICATION_TESTING.md) for the iPhone,
+Tailscale, Admin UI, and curl test matrix.
+
 ## Adding a model backend
 
 1. Add a validated backend literal in `schemas.py`.

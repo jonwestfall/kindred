@@ -1250,6 +1250,7 @@ p {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);
   gap: 24px;
   align-items: start;
+  margin-bottom: 24px;
 }
 
 .account-list {
@@ -1295,6 +1296,42 @@ p {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--wash);
+}
+
+.admin-test-card {
+  display: grid;
+  gap: 16px;
+  max-width: 1080px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #fff;
+}
+
+.admin-test-card h2 {
+  margin-bottom: 7px;
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 23px;
+}
+
+.admin-test-card p {
+  max-width: 770px;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.notification-test-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 420px) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.admin-test-note {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 
 .form-heading {
@@ -1825,6 +1862,10 @@ p {
   }
 
   .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-test-form {
     grid-template-columns: 1fr;
   }
 

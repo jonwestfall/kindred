@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Kindred",
+  "short_name": "Kindred",
+  "description": "Local-first conversations with fictional and custom characters.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6f2d61",
+  "icons": [
+    {
+      "src": "/kindred-icon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

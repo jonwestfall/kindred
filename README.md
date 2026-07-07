@@ -142,6 +142,7 @@ uploads, or VAPID private keys.
 - [Local models](docs/LOCAL_MODELS.md)
 - [Cloud backends](docs/CLOUD_BACKENDS.md)
 - [Notifications](docs/NOTIFICATIONS.md)
+- [Notification testing](docs/NOTIFICATION_TESTING.md)
 - [Rate limiting](docs/RATE_LIMITING.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Roadmap](docs/ROADMAP.md)

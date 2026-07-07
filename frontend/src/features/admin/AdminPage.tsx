@@ -138,6 +138,8 @@ export function AdminPage({ characters }: { characters: Character[] }) {
   const [editing, setEditing] = useState<UserAccount | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [testCharacterId, setTestCharacterId] = useState("");
+  const [testResult, setTestResult] = useState("");
   const characterNames = useMemo(
     () => new Map(characters.map((character) => [character.id, character.name])),
     [characters],
@@ -162,6 +164,26 @@ export function AdminPage({ characters }: { characters: Character[] }) {
     setEditing(null);
     setCreating(false);
     await refresh();
+  }
+
+  async function sendNotificationTest(event: FormEvent) {
+    event.preventDefault();
+    if (!testCharacterId) return;
+    setTestResult("Sending a logged test message through the live notification path…");
+    try {
+      const result = await api.testNotification(Number(testCharacterId));
+      setTestResult(
+        [
+          `Sent to thread #${result.thread_id}.`,
+          result.web_push_configured
+            ? "VAPID/Web Push is configured."
+            : "VAPID/Web Push is not configured; open tabs still receive WebSocket events.",
+          `${result.subscription_count} saved subscription(s) for this signed-in account.`,
+        ].join(" "),
+      );
+    } catch (caught) {
+      setTestResult(caught instanceof Error ? caught.message : "Notification test failed.");
+    }
   }
 
   return (
@@ -246,6 +268,43 @@ export function AdminPage({ characters }: { characters: Character[] }) {
           </aside>
         )}
       </div>
+      <section className="admin-test-card" aria-labelledby="notification-test-heading">
+        <div>
+          <h2 id="notification-test-heading">Notification delivery test</h2>
+          <p>
+            Send a logged character message to this signed-in account without waiting for the
+            scheduler or model. This exercises the same WebSocket, toast, service-worker, and Web
+            Push fan-out used by real character messages.
+          </p>
+        </div>
+        <form className="notification-test-form" onSubmit={sendNotificationTest}>
+          <label className="field">
+            <span>Character to send from</span>
+            <select
+              value={testCharacterId}
+              onChange={(event) => setTestCharacterId(event.target.value)}
+              required
+            >
+              <option value="" disabled>
+                Choose a character…
+              </option>
+              {characters.map((character) => (
+                <option key={character.id} value={character.id}>
+                  {character.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="primary-button" type="submit" disabled={!testCharacterId}>
+            Send test message
+          </button>
+        </form>
+        {testResult ? <p className="empty-copy">{testResult}</p> : null}
+        <p className="admin-test-note">
+          To test full autonomous generation too, use Settings → Autonomous messages → Test one
+          character now.
+        </p>
+      </section>
     </section>
   );
 }
