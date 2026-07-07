@@ -55,6 +55,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const selectedThreadIdRef = useRef<number | null>(null);
+  const viewRef = useRef<ViewName>("chat");
   const toastIdRef = useRef(0);
   const isAdmin = session?.role === "admin";
 
@@ -114,7 +115,18 @@ export default function App() {
     selectedThreadIdRef.current = selectedThread?.id ?? null;
   }, [selectedThread?.id]);
 
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
   const showToast = useCallback((payload: CharacterMessageEvent) => {
+    const activeThreadIsVisible =
+      document.visibilityState === "visible" &&
+      viewRef.current === "chat" &&
+      selectedThreadIdRef.current === payload.thread_id;
+    if (activeThreadIsVisible || document.visibilityState !== "visible") {
+      return;
+    }
     const id = toastIdRef.current + 1;
     toastIdRef.current = id;
     setToasts((current) => [
