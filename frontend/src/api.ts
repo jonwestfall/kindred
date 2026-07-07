@@ -2,6 +2,7 @@ import type {
   AppSettings,
   Character,
   CharacterDraft,
+  CharacterImportResult,
   Health,
   LogRecord,
   Message,
@@ -80,6 +81,11 @@ export const api = {
     remove: (id: number) => request<void>(`/characters/${id}`, { method: "DELETE" }),
     duplicate: (id: number) =>
       request<Character>(`/characters/${id}/duplicate`, { method: "POST" }),
+    importBundle: (bundle: unknown, nameConflict: "rename" | "skip" = "rename") =>
+      request<CharacterImportResult>(`/characters/import?name_conflict=${nameConflict}`, {
+        method: "POST",
+        body: JSON.stringify(bundle),
+      }),
   },
   threads: {
     list: () => request<Thread[]>("/threads"),
@@ -132,6 +138,22 @@ export function exportUrl(
     ...(token ? { access_token: token } : {}),
   });
   return `${API_BASE}/logs/export?${params}`;
+}
+
+function tokenParams(extra: Record<string, string> = {}): URLSearchParams {
+  const token = authToken.get();
+  return new URLSearchParams({
+    ...extra,
+    ...(token ? { access_token: token } : {}),
+  });
+}
+
+export function charactersExportUrl(): string {
+  return `${API_BASE}/characters/export?${tokenParams()}`;
+}
+
+export function characterExportUrl(characterId: number): string {
+  return `${API_BASE}/characters/${characterId}/export?${tokenParams()}`;
 }
 
 export function websocketUrl(): string {

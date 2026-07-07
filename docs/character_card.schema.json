@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kindred-app/kindred/docs/character_card.schema.json",
+  "title": "Kindred Character Card Bundle",
+  "description": "Portable Kindred character import/export file. Use this to trade, back up, or LLM-generate chattable character profiles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "characters"],
+  "properties": {
+    "schema": {
+      "const": "kindred.character_card.v1"
+    },
+    "exported_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "characters": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/character"
+      }
+    }
+  },
+  "$defs": {
+    "character": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "avatar_url": {
+          "type": "string",
+          "maxLength": 2000,
+          "default": ""
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000,
+          "default": ""
+        },
+        "personality": {
+          "type": "string",
+          "maxLength": 8000,
+          "default": ""
+        },
+        "speaking_style": {
+          "type": "string",
+          "maxLength": 4000,
+          "default": ""
+        },
+        "backstory": {
+          "type": "string",
+          "maxLength": 12000,
+          "default": ""
+        },
+        "goals": {
+          "type": "string",
+          "maxLength": 6000,
+          "default": ""
+        },
+        "boundaries": {
+          "type": "string",
+          "maxLength": 6000,
+          "default": ""
+        },
+        "backend": {
+          "enum": ["ollama", "llamacpp", "openai_compatible"],
+          "default": "ollama"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "default": "llama3.2:1b"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 0.7
+        },
+        "initiative_frequency": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 24,
+          "default": 1.0
+        },
+        "cooldown_minutes": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 10080,
+          "default": 240
+        },
+        "source_title": {
+          "type": "string",
+          "maxLength": 500,
+          "default": ""
+        },
+        "source_author": {
+          "type": "string",
+          "maxLength": 300,
+          "default": ""
+        },
+        "source_reference": {
+          "type": "string",
+          "maxLength": 1000,
+          "default": ""
+        },
+        "creator_notes": {
+          "type": "string",
+          "maxLength": 4000,
+          "default": ""
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "default": []
+        }
+      }
+    }
+  }
+}

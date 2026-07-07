@@ -32,3 +32,5 @@ versioning once the first release is tagged.
   logs/exports, and an Admin dashboard.
 - Docker Compose examples for local startup, VAPID key mounting, public-domain
   Caddy reverse proxying, and Tailscale Serve HTTPS deployment.
+- Portable `kindred.character_card.v1` JSON import/export for character backup,
+  trading, and LLM-generated character-card creation.

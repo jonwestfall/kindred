@@ -126,8 +126,11 @@ FastAPI serves live OpenAPI docs at `/docs` and the schema at `/openapi.json`.
 | `GET/POST /api/users` | Admin-only regular account list/create |
 | `PATCH/DELETE /api/users/{id}` | Admin-only account update/delete |
 | `GET/POST /api/characters` | List or create characters |
+| `GET /api/characters/export` | Admin-only portable character-card bundle download |
+| `POST /api/characters/import` | Admin-only portable character-card bundle import |
 | `GET/PATCH/DELETE /api/characters/{id}` | Character detail and mutation |
 | `POST /api/characters/{id}/duplicate` | Copy a character profile |
+| `GET /api/characters/{id}/export` | Admin-only one-character card download |
 | `POST /api/characters/{id}/avatar` | Store a local image up to 5 MB |
 | `GET/POST /api/threads` | List or create conversation threads |
 | `GET /api/threads/{id}/messages` | Read a thread |

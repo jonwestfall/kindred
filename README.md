@@ -24,6 +24,8 @@ cloud provider is available only when a character explicitly opts into it.
   limits checked before dispatch. Cloud dry-run is on by default.
 - Sign in with an env-backed administrator account, manage regular local users,
   assign character access, and let admins view/export all chats.
+- Import/export portable JSON character cards for trading, backup, and
+  LLM-assisted character creation.
 - Develop on Apple Silicon and deploy the same app image on ARM64 Raspberry Pi.
 
 ## Quick start on macOS
@@ -124,6 +126,7 @@ uploads, or VAPID private keys.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Authentication](docs/AUTHENTICATION.md)
+- [Character cards](docs/CHARACTER_CARDS.md)
 - [Docker Compose examples](docs/DOCKER_COMPOSE.md)
 - [Install on macOS](docs/INSTALL_MAC.md)
 - [Install on Raspberry Pi](docs/INSTALL_RASPBERRY_PI.md)

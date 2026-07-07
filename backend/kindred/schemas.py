@@ -65,6 +65,41 @@ class Character(CharacterBase):
     updated_at: datetime
 
 
+class CharacterCardProfile(CharacterBase):
+    """Portable, tradeable character profile.
+
+    The core CharacterBase fields are imported into Kindred. The source and
+    creator metadata fields travel with exported files so people and LLMs can
+    explain where a card came from, but they are not required for chat.
+    """
+
+    source_title: str = Field(default="", max_length=500)
+    source_author: str = Field(default="", max_length=300)
+    source_reference: str = Field(default="", max_length=1000)
+    creator_notes: str = Field(default="", max_length=4000)
+    tags: list[str] = Field(default_factory=list, max_length=24)
+
+
+class CharacterCardBundle(BaseModel):
+    """Versioned Kindred character-card import/export file."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    schema_: Literal["kindred.character_card.v1"] = Field(
+        default="kindred.character_card.v1",
+        alias="schema",
+    )
+    exported_at: datetime | None = None
+    characters: list[CharacterCardProfile] = Field(min_length=1, max_length=100)
+
+
+class CharacterImportResult(BaseModel):
+    """Result of importing one character-card bundle."""
+
+    created: list[Character]
+    skipped: list[str]
+
+
 class ThreadCreate(BaseModel):
     """Create a conversation thread for one character."""
 

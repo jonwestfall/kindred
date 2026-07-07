@@ -170,6 +170,11 @@ export default function App() {
           await api.characters.duplicate(character.id);
           await refreshBase();
         }}
+        onImportBundle={async (bundle) => {
+          const result = await api.characters.importBundle(bundle);
+          await refreshBase();
+          return result;
+        }}
         onDelete={async (character) => {
           if (!window.confirm(`Delete ${character.name} and every conversation with them?`)) return;
           await api.characters.remove(character.id);

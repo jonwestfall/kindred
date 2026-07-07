@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from hmac import compare_digest as hmac_compare
 from pathlib import Path
+from re import sub
 from typing import Any
 
 from fastapi import (
@@ -21,6 +23,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -43,7 +46,11 @@ from .notifications import NotificationService
 from .rate_limits import LimitExceeded, RateLimiter
 from .schemas import (
     Character,
+    CharacterBase,
+    CharacterCardBundle,
+    CharacterCardProfile,
     CharacterCreate,
+    CharacterImportResult,
     CharacterUpdate,
     ChatRequest,
     ImageGenerationRequest,
@@ -62,6 +69,31 @@ from .schemas import (
 def _load_json(path: Path) -> Any:
     with path.open(encoding="utf-8") as handle:
         return json.load(handle)
+
+
+_CHARACTER_FIELD_NAMES = set(CharacterBase.model_fields)
+
+
+def _safe_filename(value: str) -> str:
+    """Create a conservative download filename component."""
+
+    cleaned = sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-").lower()
+    return cleaned or "character"
+
+
+def _character_to_card(character: dict[str, Any]) -> CharacterCardProfile:
+    """Convert a stored database row into a portable card profile."""
+
+    return CharacterCardProfile(**{field: character[field] for field in _CHARACTER_FIELD_NAMES})
+
+
+def _bundle_for_characters(characters: list[dict[str, Any]]) -> CharacterCardBundle:
+    """Build a versioned export bundle with current UTC timestamp."""
+
+    return CharacterCardBundle(
+        exported_at=datetime.now(UTC),
+        characters=[_character_to_card(character) for character in characters],
+    )
 
 
 def create_app(runtime_settings: Settings | None = None) -> FastAPI:
@@ -242,6 +274,82 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     @app.post("/api/characters", response_model=Character, status_code=201, tags=["characters"])
     def create_character(payload: CharacterCreate, _: Principal = Depends(require_admin)) -> dict[str, Any]:
         return database.create_character(payload.model_dump())
+
+    @app.get("/api/characters/export", tags=["characters"])
+    def export_all_characters(
+        access_token: str = "",
+        authorization: str | None = Header(default=None),
+    ) -> JSONResponse:
+        """Download all character profiles as a portable Kindred card bundle."""
+
+        principal = _principal_from_download_token(access_token, authorization)
+        if not principal.is_admin:
+            raise HTTPException(403, "Administrator access required")
+        bundle = _bundle_for_characters(database.list_characters())
+        return JSONResponse(
+            jsonable_encoder(bundle),
+            headers={"Content-Disposition": 'attachment; filename="kindred-characters.json"'},
+        )
+
+    @app.post(
+        "/api/characters/import",
+        response_model=CharacterImportResult,
+        status_code=201,
+        tags=["characters"],
+    )
+    def import_characters(
+        payload: CharacterCardBundle,
+        name_conflict: str = Query(default="rename", pattern="^(rename|skip)$"),
+        _: Principal = Depends(require_admin),
+    ) -> dict[str, Any]:
+        """Create characters from a versioned, portable Kindred card bundle."""
+
+        existing_names = {character["name"].casefold() for character in database.list_characters()}
+        created: list[dict[str, Any]] = []
+        skipped: list[str] = []
+        for card in payload.characters:
+            values = {
+                field: getattr(card, field)
+                for field in _CHARACTER_FIELD_NAMES
+            }
+            original_name = str(values["name"]).strip()
+            candidate = original_name
+            if candidate.casefold() in existing_names:
+                if name_conflict == "skip":
+                    skipped.append(original_name)
+                    continue
+                base = f"{original_name} (import)"
+                candidate = base
+                index = 2
+                while candidate.casefold() in existing_names:
+                    candidate = f"{base} {index}"
+                    index += 1
+            values["name"] = candidate
+            imported = database.create_character(values)
+            existing_names.add(imported["name"].casefold())
+            created.append(imported)
+        return {"created": created, "skipped": skipped}
+
+    @app.get("/api/characters/{character_id}/export", tags=["characters"])
+    def export_character(
+        character_id: int,
+        access_token: str = "",
+        authorization: str | None = Header(default=None),
+    ) -> JSONResponse:
+        """Download one character profile as a portable Kindred card bundle."""
+
+        principal = _principal_from_download_token(access_token, authorization)
+        if not principal.is_admin:
+            raise HTTPException(403, "Administrator access required")
+        character = database.get_character(character_id)
+        if not character:
+            raise HTTPException(404, "Character not found")
+        bundle = _bundle_for_characters([character])
+        filename = f"kindred-character-{_safe_filename(character['name'])}.json"
+        return JSONResponse(
+            jsonable_encoder(bundle),
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.get("/api/characters/{character_id}", response_model=Character, tags=["characters"])
     def get_character(

@@ -21,6 +21,11 @@ export interface Character {
 
 export type CharacterDraft = Omit<Character, "id" | "created_at" | "updated_at">;
 
+export interface CharacterImportResult {
+  created: Character[];
+  skipped: string[];
+}
+
 export interface Thread {
   id: number;
   character_id: number;
