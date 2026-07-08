@@ -47,3 +47,6 @@ versioning once the first release is tagged.
   threads, even for administrators; admins can explicitly request
   `scope=all` for audit tooling. Thread responses include owner metadata so
   admin views can distinguish administrator and regular-user conversations.
+- Web Push notifications now use message-specific tags and carry thread/message
+  metadata so multiple chatbot messages do not collapse into one notification,
+  and notification clicks route an existing Kindred window to the target thread.

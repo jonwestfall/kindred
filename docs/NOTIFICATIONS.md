@@ -20,6 +20,10 @@ subscription for the signed-in account when VAPID is configured. Without VAPID
 it enables in-tab browser alerts and explains that background push is
 unavailable.
 
+Each pushed character message carries its target thread and a message-specific
+notification tag. Clicking the notification opens Kindred to `/?thread=...` or
+navigates an already-open same-origin Kindred window to that thread.
+
 Permission may be denied permanently for an origin. Reset it in browser site
 settings before retrying.
 

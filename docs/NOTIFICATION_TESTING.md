@@ -90,6 +90,8 @@ Web Push.
    - if Kindred is open elsewhere, an in-app toast appears;
    - if the Home Screen app is backgrounded or the phone is locked, an iOS
      notification appears.
+   - tapping the iOS notification opens Kindred to the thread that received the
+     message, even if another Kindred page was already open.
 
 9. Open Activity and search for `notification test` or the test message text.
    The row should be logged with backend `kindred`, model

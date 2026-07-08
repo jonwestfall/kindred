@@ -58,11 +58,17 @@ class NotificationService:
             from pywebpush import WebPushException, webpush
         except ImportError:
             return
+        message = event.get("message") if isinstance(event.get("message"), dict) else {}
+        thread_id = event.get("thread_id", "")
+        message_id = message.get("id") or event.get("message_id") or ""
         payload = json.dumps(
             {
                 "title": event.get("character_name", "Kindred"),
                 "body": event.get("content", "A character sent a message."),
-                "url": f"/?thread={event.get('thread_id', '')}",
+                "url": f"/?thread={thread_id}",
+                "thread_id": thread_id,
+                "message_id": message_id,
+                "tag": f"kindred-message-{message_id}" if message_id else f"kindred-thread-{thread_id}",
             }
         )
         target_user_id = event.get("user_id", _MISSING)
