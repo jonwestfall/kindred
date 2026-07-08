@@ -19,6 +19,11 @@ from typing import Any, Iterator, Sequence
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    description TEXT NOT NULL,
+    applied_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -149,6 +154,10 @@ CREATE TABLE IF NOT EXISTS character_lore_packs (
 );
 CREATE INDEX IF NOT EXISTS idx_character_lore_packs_pack ON character_lore_packs(pack_id);
 """
+SCHEMA_VERSION = 1
+MIGRATIONS: tuple[tuple[int, str], ...] = (
+    (1, "Baseline MVP schema with auth, lore, notifications, and backups"),
+)
 
 CHARACTER_COLUMNS = (
     "name",
@@ -238,6 +247,7 @@ class Database:
     def restore_from(self, source: Path, defaults: dict[str, Any]) -> None:
         """Replace the SQLite database file with a validated backup file."""
 
+        self._validate_restorable_database(source)
         self._unlink_database_files()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, self.path)
@@ -261,7 +271,29 @@ class Database:
             (self.path.parent / f"{self.path.name}{suffix}").unlink(missing_ok=True)
 
     def _migrate(self, connection: sqlite3.Connection) -> None:
-        """Apply tiny additive migrations for existing local databases."""
+        """Apply idempotent migrations and record the current schema version."""
+
+        self._apply_legacy_additive_migrations(connection)
+        applied_versions = {
+            int(row["version"])
+            for row in connection.execute("SELECT version FROM schema_migrations").fetchall()
+        }
+        if applied_versions and max(applied_versions) > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema version {max(applied_versions)} is newer than this Kindred build "
+                f"supports ({SCHEMA_VERSION})"
+            )
+        now = iso()
+        for version, description in MIGRATIONS:
+            if version not in applied_versions:
+                connection.execute(
+                    """INSERT INTO schema_migrations(version, description, applied_at)
+                       VALUES (?, ?, ?)""",
+                    (version, description, now),
+                )
+
+    def _apply_legacy_additive_migrations(self, connection: sqlite3.Connection) -> None:
+        """Bridge pre-ledger local databases into the versioned migration era."""
 
         table_columns = {
             table: {row["name"] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -281,6 +313,31 @@ class Database:
             )
         connection.execute("CREATE INDEX IF NOT EXISTS idx_threads_user_time ON threads(user_id, updated_at)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_messages_user_time ON messages(user_id, timestamp)")
+
+    def _validate_restorable_database(self, source: Path) -> None:
+        """Check a backup database before replacing the live SQLite file."""
+
+        source_connection = sqlite3.connect(source)
+        source_connection.row_factory = sqlite3.Row
+        try:
+            source_connection.execute("PRAGMA foreign_keys = ON")
+            source_connection.executescript(SCHEMA)
+            self._migrate(source_connection)
+            source_connection.commit()
+        except Exception:
+            source_connection.rollback()
+            raise
+        finally:
+            source_connection.close()
+
+    def schema_version(self) -> int:
+        """Return the highest applied schema migration version."""
+
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations"
+            ).fetchone()
+        return int(row["version"])
 
     def seed_characters(self, characters: Sequence[dict[str, Any]]) -> int:
         """Insert seed characters only when the character table is empty."""

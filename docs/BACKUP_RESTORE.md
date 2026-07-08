@@ -6,7 +6,7 @@ Administrators can manage whole-system backups from **System**.
 
 Click **Download backup** to receive a `.zip` file containing:
 
-- `manifest.json` with version/build metadata;
+- `manifest.json` with version/build and database schema metadata;
 - `database/kindred.db`, a consistent SQLite snapshot;
 - `uploads/`, if local uploaded files exist.
 
@@ -19,6 +19,10 @@ usage logs, push subscriptions, and cached embeddings. It does not contain
 Click **Restore backup** and choose a Kindred backup zip. Restore replaces the
 current SQLite database and uploaded files. The daemon is paused briefly during
 restore and then restarted.
+
+Kindred checks the backup database schema before replacing the live database.
+A backup made by a newer Kindred build is rejected with a clear error so the
+current database remains intact.
 
 Before restoring, download a fresh backup of the current system if there is
 anything you may want later.

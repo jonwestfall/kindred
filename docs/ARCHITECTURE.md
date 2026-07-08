@@ -55,6 +55,8 @@ for a personal service on Pi-class hardware.
   one user account.
 - `messages`: content plus timestamp, backend/model, context summary, safe
   character rationale, autonomous-message marker, and optional user owner.
+- `schema_migrations`: applied SQLite schema versions used for compatibility
+  checks during startup and backup restore.
 - `lore_packs`: imported fact-pack metadata for local retrieval grounding.
 - `lore_facts`: atomic facts, keywords, tags, source references, and weights.
 - `lore_fact_embeddings`: optional cached vectors for semantic lore retrieval.

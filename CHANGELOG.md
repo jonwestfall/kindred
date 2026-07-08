@@ -50,3 +50,6 @@ versioning once the first release is tagged.
 - Web Push notifications now use message-specific tags and carry thread/message
   metadata so multiple chatbot messages do not collapse into one notification,
   and notification clicks route an existing Kindred window to the target thread.
+- SQLite now records a schema migration version, exposes it in health and
+  backup metadata, and rejects future-schema backup restores before replacing
+  the live database.

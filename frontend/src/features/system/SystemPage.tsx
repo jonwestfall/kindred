@@ -170,6 +170,10 @@ export function SystemPage() {
                 <dd>{health.database}</dd>
               </div>
               <div>
+                <dt>Database schema</dt>
+                <dd>v{health.database_schema_version}</dd>
+              </div>
+              <div>
                 <dt>Daemon process</dt>
                 <dd>{health.daemon.process_enabled ? "Enabled" : "Disabled"}</dd>
               </div>

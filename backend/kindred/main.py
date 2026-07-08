@@ -347,6 +347,7 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
             },
             "environment": settings.environment,
             "database": str(settings.database_path),
+            "database_schema_version": database.schema_version(),
             "backends": await llm.backend_status(),
             "daemon": {
                 "process_enabled": settings.daemon_enabled,
@@ -815,6 +816,7 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
                         "api_version": _package_version(),
                         "frontend_version": _frontend_version(),
                         "build": settings.build_number,
+                        "database_schema_version": database.schema_version(),
                         "repository_url": REPOSITORY_URL,
                         "database": "database/kindred.db",
                         "uploads_count": upload_count,
@@ -857,7 +859,10 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
                 archive.extractall(extract_dir)
             await daemon.stop()
             stopped_daemon = True
-            database.restore_from(extract_dir / "database/kindred.db", defaults)
+            try:
+                database.restore_from(extract_dir / "database/kindred.db", defaults)
+            except RuntimeError as exc:
+                raise HTTPException(400, str(exc)) from exc
             restored_uploads = extract_dir / "uploads"
             if uploads.exists():
                 shutil.rmtree(uploads)

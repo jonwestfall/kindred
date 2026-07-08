@@ -124,6 +124,7 @@ export interface Health {
   frontend: { version: string; build: string };
   runtime: { python: string; platform: string; build: string };
   database: string;
+  database_schema_version: number;
   environment: string;
   backends: Record<string, Record<string, unknown>>;
   daemon: { process_enabled: boolean; settings: Record<string, unknown> };

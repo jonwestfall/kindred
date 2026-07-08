@@ -99,13 +99,15 @@ Tailscale, Admin UI, and curl test matrix.
 
 ## Schema changes
 
-`SCHEMA` handles initial creation but is not a general migration framework.
-Before changing a shipped column:
+`SCHEMA` handles initial creation, and `schema_migrations` records the highest
+database shape this build understands. Before changing a shipped table:
 
 1. copy the database;
-2. add a schema-version table and explicit idempotent migration;
-3. test upgrading from the last release;
-4. document rollback.
+2. add an explicit idempotent migration and bump the schema version;
+3. test upgrading from the last release or a fixture copy of that release;
+4. test that backups with a future schema are rejected before replacing the
+   live database;
+5. document rollback.
 
 Do not ask users to delete their database to upgrade.
 
