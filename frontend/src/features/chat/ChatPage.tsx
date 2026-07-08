@@ -46,6 +46,7 @@ function ConversationList({
                 <strong>{thread.character_name}</strong>
                 <time>{formatTime(thread.last_message_at ?? thread.updated_at)}</time>
               </span>
+              <small className="conversation-owner">Owner: {thread.owner_label}</small>
               <span>{thread.last_message || "Start a conversation"}</span>
             </span>
           </button>
@@ -227,4 +228,3 @@ export function ChatPage({
     </div>
   );
 }
-

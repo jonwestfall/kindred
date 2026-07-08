@@ -40,3 +40,10 @@ versioning once the first release is tagged.
   vector caching and lexical fallback.
 - System dashboard backup, restore, reset-to-defaults, version/build metadata,
   repository link, and public-domain literary examples with lore packs.
+
+### Changed
+
+- Conversation thread listing now defaults to the signed-in account's own
+  threads, even for administrators; admins can explicitly request
+  `scope=all` for audit tooling. Thread responses include owner metadata so
+  admin views can distinguish administrator and regular-user conversations.

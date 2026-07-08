@@ -208,7 +208,10 @@ export default function App() {
   );
 
   async function openCharacterChat(character: Character) {
-    const existing = threads.find((thread) => thread.character_id === character.id);
+    const currentOwnerId = session?.user_id ?? null;
+    const existing = threads.find(
+      (thread) => thread.character_id === character.id && thread.user_id === currentOwnerId,
+    );
     const thread = existing ?? (await api.threads.create(character.id));
     if (!existing) await refreshBase();
     setSelectedThread(thread);

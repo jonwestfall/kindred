@@ -14,7 +14,7 @@ from hmac import compare_digest as hmac_compare
 from importlib import metadata
 from pathlib import Path
 from re import sub
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import (
     Depends,
@@ -597,14 +597,19 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     @app.get("/api/threads", tags=["chat"])
     def list_threads(
         character_id: int | None = None,
+        scope: Literal["mine", "all"] = "mine",
         principal: Principal = Depends(authenticate_request),
     ) -> list[dict[str, Any]]:
+        """List current-account threads by default; admins may request all."""
+
         if character_id is not None:
             _require_character_access(character_id, principal)
+        if scope == "all" and not principal.is_admin:
+            raise HTTPException(403, "Administrator access required for all threads")
         return database.list_threads(
             character_id,
             user_id=principal.user_id,
-            include_all=_include_all(principal),
+            include_all=principal.is_admin and scope == "all",
         )
 
     @app.post("/api/threads", status_code=201, tags=["chat"])

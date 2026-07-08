@@ -148,7 +148,7 @@ FastAPI serves live OpenAPI docs at `/docs` and the schema at `/openapi.json`.
 | `POST /api/lore-packs/import` | Admin-only lore/fact-pack import |
 | `GET/DELETE /api/lore-packs/{id}` | Admin-only lore/fact-pack detail/delete |
 | `GET /api/lore-packs/{id}/export` | Admin-only lore/fact-pack download |
-| `GET/POST /api/threads` | List or create conversation threads |
+| `GET/POST /api/threads` | List current-account conversation threads or create one; admins may use `scope=all` for audit views |
 | `GET /api/threads/{id}/messages` | Read a thread |
 | `POST /api/threads/{id}/messages` | Store user message and generate reply |
 | `GET /api/messages/recent` | Recent messages across characters |

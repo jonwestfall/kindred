@@ -16,6 +16,12 @@ The administrator is intentionally not stored in SQLite. If the database is
 lost, corrupted, or misconfigured, you can still recover by editing `.env` and
 restarting Kindred.
 
+Thread listing is scoped to the signed-in account by default, including for the
+administrator. This keeps the normal chat UI from accidentally continuing a
+regular user's conversation. Administrators can request an explicit audit list
+with `GET /api/threads?scope=all`; Activity and log export already show all
+administrator-visible conversations.
+
 ## Required `.env` settings
 
 ```dotenv

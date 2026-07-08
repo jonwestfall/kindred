@@ -56,9 +56,13 @@ export interface LorePack {
 export interface Thread {
   id: number;
   character_id: number;
+  user_id: number | null;
   character_name: string;
   avatar_url: string;
   title: string;
+  owner_label: string;
+  owner_username?: string | null;
+  owner_display_name?: string | null;
   created_at: string;
   updated_at: string;
   last_message?: string;

@@ -109,3 +109,53 @@ def test_disabled_user_cannot_keep_using_existing_token(tmp_path: Path):
         )
         assert disabled.status_code == 200
         assert client.get("/api/characters", headers=user_headers).status_code == 403
+
+
+def test_admin_thread_listing_defaults_to_own_scope_and_all_scope_is_explicit(tmp_path: Path):
+    app = create_app(auth_settings(tmp_path / "thread-scope-test.db"))
+    with TestClient(app) as client:
+        admin_headers = login(client, "root", "correct-horse-battery-staple")
+        character = client.get("/api/characters", headers=admin_headers).json()[0]
+        user = client.post(
+            "/api/users",
+            headers=admin_headers,
+            json={
+                "username": "reader",
+                "display_name": "Reader",
+                "password": "local-password",
+                "character_ids": [character["id"]],
+            },
+        ).json()
+        user_headers = login(client, "reader", "local-password")
+
+        user_thread = client.post(
+            "/api/threads",
+            headers=user_headers,
+            json={"character_id": character["id"], "title": "Reader thread"},
+        ).json()
+        admin_thread = client.post(
+            "/api/threads",
+            headers=admin_headers,
+            json={"character_id": character["id"], "title": "Admin thread"},
+        ).json()
+
+        assert user_thread["user_id"] == user["id"]
+        assert user_thread["owner_label"] == "Reader"
+        assert admin_thread["user_id"] is None
+        assert admin_thread["owner_label"] == "Administrator"
+
+        admin_default = client.get("/api/threads", headers=admin_headers).json()
+        assert {thread["id"] for thread in admin_default} == {admin_thread["id"]}
+
+        admin_all = client.get("/api/threads?scope=all", headers=admin_headers).json()
+        assert {thread["id"] for thread in admin_all} == {
+            admin_thread["id"],
+            user_thread["id"],
+        }
+        assert {
+            thread["owner_label"] for thread in admin_all
+        } == {"Administrator", "Reader"}
+
+        user_default = client.get("/api/threads", headers=user_headers).json()
+        assert {thread["id"] for thread in user_default} == {user_thread["id"]}
+        assert client.get("/api/threads?scope=all", headers=user_headers).status_code == 403

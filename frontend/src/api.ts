@@ -122,7 +122,7 @@ export const api = {
     remove: (id: number) => request<void>(`/lore-packs/${id}`, { method: "DELETE" }),
   },
   threads: {
-    list: () => request<Thread[]>("/threads"),
+    list: (scope: "mine" | "all" = "mine") => request<Thread[]>(`/threads?scope=${scope}`),
     create: (characterId: number) =>
       request<Thread>("/threads", {
         method: "POST",

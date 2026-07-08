@@ -619,12 +619,20 @@ class Database:
     def get_thread(self, thread_id: int) -> dict[str, Any] | None:
         with self.connection() as connection:
             row = connection.execute(
-                """SELECT t.*, c.name AS character_name, c.avatar_url
-                   FROM threads t JOIN characters c ON c.id = t.character_id
+                """SELECT t.*, c.name AS character_name, c.avatar_url,
+                          u.username AS owner_username,
+                          u.display_name AS owner_display_name
+                   FROM threads t
+                   JOIN characters c ON c.id = t.character_id
+                   LEFT JOIN users u ON u.id = t.user_id
                    WHERE t.id = ?""",
                 (thread_id,),
             ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        result = dict(row)
+        result["owner_label"] = self._thread_owner_label(result)
+        return result
 
     def get_or_create_thread(self, character_id: int, user_id: int | None = None) -> dict[str, Any]:
         user_clause = "user_id IS NULL" if user_id is None else "user_id = ?"
@@ -660,16 +668,34 @@ class Database:
         with self.connection() as connection:
             rows = connection.execute(
                 f"""SELECT t.*, c.name AS character_name, c.avatar_url,
+                       u.username AS owner_username,
+                       u.display_name AS owner_display_name,
                        (SELECT content FROM messages m WHERE m.thread_id = t.id
                         ORDER BY m.timestamp DESC LIMIT 1) AS last_message,
                        (SELECT timestamp FROM messages m WHERE m.thread_id = t.id
                         ORDER BY m.timestamp DESC LIMIT 1) AS last_message_at
-                    FROM threads t JOIN characters c ON c.id = t.character_id
+                    FROM threads t
+                    JOIN characters c ON c.id = t.character_id
+                    LEFT JOIN users u ON u.id = t.user_id
                     {where}
                     ORDER BY COALESCE(last_message_at, t.updated_at) DESC""",
                 tuple(params),
             ).fetchall()
-        return [dict(row) for row in rows]
+        results = [dict(row) for row in rows]
+        for result in results:
+            result["owner_label"] = self._thread_owner_label(result)
+        return results
+
+    def _thread_owner_label(self, thread: dict[str, Any]) -> str:
+        """Return a human-readable owner label for admin/audit displays."""
+
+        if thread.get("user_id") is None:
+            return "Administrator"
+        return (
+            str(thread.get("owner_display_name") or "").strip()
+            or str(thread.get("owner_username") or "").strip()
+            or f"User #{thread['user_id']}"
+        )
 
     def add_message(
         self,
