@@ -8,6 +8,7 @@
 - Optional OpenAI-compatible adapter with dry run and budgets
 - Autonomous daemon with quiet hours, cooldowns, randomness, and global limits
 - WebSocket live updates, service worker, and optional Web Push
+- Notification subscription management and delivery diagnostics
 - Searchable local activity and Markdown/JSON export
 - Backend, smoke, and desktop/mobile end-to-end tests
 - macOS and Raspberry Pi deployment paths
@@ -20,7 +21,6 @@
   and clearer session/device management
 - CSRF protection for subscription and mutation endpoints
 - Streaming model responses with cancellation
-- Notification subscription management and delivery diagnostics
 - Daemon run history and next-window explanation in the UI
 - Thread archive/hide controls for preserving old conversations without deleting
 - Manual lore re-indexing and embedding health diagnostics

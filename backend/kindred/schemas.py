@@ -213,6 +213,52 @@ class NotificationTestResult(BaseModel):
     message: Message
 
 
+class NotificationSubscriptionOut(BaseModel):
+    """Safe diagnostic metadata for one saved browser push subscription."""
+
+    id: int
+    user_id: int | None = None
+    owner_label: str
+    owner_username: str | None = None
+    owner_display_name: str | None = None
+    endpoint_host: str
+    endpoint_preview: str
+    created_at: datetime
+    has_keys: bool
+
+
+class NotificationDeliveryOut(BaseModel):
+    """One recent notification delivery or skip diagnostic row."""
+
+    id: int
+    timestamp: datetime
+    channel: str
+    status: Literal["sent", "failed", "expired", "skipped"]
+    detail: str
+    endpoint_host: str = ""
+    endpoint_preview: str = ""
+    user_id: int | None = None
+    owner_label: str
+    owner_username: str | None = None
+    owner_display_name: str | None = None
+    thread_id: int | None = None
+    message_id: int | None = None
+    character_id: int | None = None
+
+
+class NotificationDiagnostics(BaseModel):
+    """Current notification configuration, subscriptions, and recent attempts."""
+
+    scope: Literal["mine", "all"]
+    notifications_enabled: bool
+    web_push_configured: bool
+    vapid_subject: str
+    active_websocket_count: int
+    subscription_count: int
+    subscriptions: list[NotificationSubscriptionOut]
+    recent_deliveries: list[NotificationDeliveryOut]
+
+
 class SettingsUpdate(BaseModel):
     """A shallow patch to one persisted settings section."""
 

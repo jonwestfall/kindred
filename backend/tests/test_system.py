@@ -32,7 +32,7 @@ def test_health_reports_versions_builds_and_repository(client):
     assert health["api"]["build"] == "test-build"
     assert health["frontend"]["build"] == "test-frontend-build"
     assert health["runtime"]["python"]
-    assert health["database_schema_version"] == 1
+    assert health["database_schema_version"] == 2
 
 
 def test_backup_and_restore_round_trip(client):
@@ -45,7 +45,7 @@ def test_backup_and_restore_round_trip(client):
         assert "manifest.json" in archive.namelist()
         assert "database/kindred.db" in archive.namelist()
         manifest = archive.read("manifest.json")
-    assert b'"database_schema_version": 1' in manifest
+    assert b'"database_schema_version": 2' in manifest
 
     post_backup_payload = {**CHARACTER_PAYLOAD, "name": "Post Backup Marker"}
     assert client.post("/api/characters", json=post_backup_payload).status_code == 201

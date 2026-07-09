@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator, Sequence
+from urllib.parse import urlparse
 
 
 SCHEMA = """
@@ -91,6 +92,23 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
     subscription_json TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    status TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT '',
+    endpoint TEXT NOT NULL DEFAULT '',
+    endpoint_host TEXT NOT NULL DEFAULT '',
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    thread_id INTEGER,
+    message_id INTEGER,
+    character_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_time
+    ON notification_deliveries(timestamp);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_user_time
+    ON notification_deliveries(user_id, timestamp);
 CREATE TABLE IF NOT EXISTS daemon_state (
     character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
     last_checked_at TEXT,
@@ -154,9 +172,10 @@ CREATE TABLE IF NOT EXISTS character_lore_packs (
 );
 CREATE INDEX IF NOT EXISTS idx_character_lore_packs_pack ON character_lore_packs(pack_id);
 """
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MIGRATIONS: tuple[tuple[int, str], ...] = (
     (1, "Baseline MVP schema with auth, lore, notifications, and backups"),
+    (2, "Notification subscription diagnostics and delivery attempt ledger"),
 )
 
 CHARACTER_COLUMNS = (
@@ -194,6 +213,23 @@ def _tokens(value: str) -> set[str]:
     """Small lexical tokenizer for local, dependency-free lore retrieval."""
 
     return {token.casefold() for token in _TOKEN_RE.findall(value) if len(token) > 2}
+
+
+def _endpoint_host(endpoint: str) -> str:
+    """Extract a browser push endpoint host for safe diagnostics display."""
+
+    parsed = urlparse(endpoint)
+    if parsed.netloc:
+        return parsed.netloc
+    return endpoint.split("/", 1)[0][:120]
+
+
+def _endpoint_preview(endpoint: str) -> str:
+    """Shorten a long push endpoint without exposing the entire device URL."""
+
+    if len(endpoint) <= 90:
+        return endpoint
+    return f"{endpoint[:45]}…{endpoint[-28:]}"
 
 
 class Database:
@@ -1032,9 +1068,165 @@ class Database:
             ).fetchall()
         return [json.loads(row["subscription_json"]) for row in rows]
 
-    def delete_subscription(self, endpoint: str) -> None:
+    def list_subscription_records(
+        self,
+        user_id: int | None | object = _ANY,
+        *,
+        include_subscription: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return browser push subscriptions with safe diagnostic metadata."""
+
+        clause = ""
+        params: tuple[Any, ...] = ()
+        if user_id is not _ANY:
+            if user_id is None:
+                clause = "WHERE ps.user_id IS NULL"
+            else:
+                clause = "WHERE ps.user_id = ?"
+                params = (user_id,)
         with self.connection() as connection:
-            connection.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+            rows = connection.execute(
+                f"""SELECT ps.*, u.username AS owner_username, u.display_name AS owner_display_name
+                    FROM push_subscriptions ps
+                    LEFT JOIN users u ON u.id = ps.user_id
+                    {clause}
+                    ORDER BY ps.created_at DESC""",
+                params,
+            ).fetchall()
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            subscription = json.loads(row["subscription_json"])
+            endpoint = str(row["endpoint"])
+            keys = subscription.get("keys", {}) if isinstance(subscription, dict) else {}
+            record = {
+                "id": int(row["id"]),
+                "user_id": row["user_id"],
+                "owner_username": row["owner_username"],
+                "owner_display_name": row["owner_display_name"],
+                "owner_label": self._thread_owner_label(dict(row)),
+                "endpoint_host": _endpoint_host(endpoint),
+                "endpoint_preview": _endpoint_preview(endpoint),
+                "created_at": row["created_at"],
+                "has_keys": bool(keys.get("p256dh") and keys.get("auth")),
+            }
+            if include_subscription:
+                record["subscription"] = subscription
+                record["endpoint"] = endpoint
+            results.append(record)
+        return results
+
+    def delete_subscription(
+        self,
+        endpoint: str,
+        *,
+        user_id: int | None = None,
+        include_all: bool = True,
+    ) -> bool:
+        """Delete a subscription endpoint, optionally scoped to one account."""
+
+        clause = "endpoint = ?"
+        params: list[Any] = [endpoint]
+        if not include_all:
+            if user_id is None:
+                clause += " AND user_id IS NULL"
+            else:
+                clause += " AND user_id = ?"
+                params.append(user_id)
+        with self.connection() as connection:
+            cursor = connection.execute(f"DELETE FROM push_subscriptions WHERE {clause}", tuple(params))
+        return cursor.rowcount > 0
+
+    def delete_subscription_by_id(
+        self,
+        subscription_id: int,
+        *,
+        user_id: int | None = None,
+        include_all: bool = False,
+    ) -> bool:
+        """Delete one saved browser subscription after caller-side access checks."""
+
+        clause = "id = ?"
+        params: list[Any] = [subscription_id]
+        if not include_all:
+            if user_id is None:
+                clause += " AND user_id IS NULL"
+            else:
+                clause += " AND user_id = ?"
+                params.append(user_id)
+        with self.connection() as connection:
+            cursor = connection.execute(f"DELETE FROM push_subscriptions WHERE {clause}", tuple(params))
+        return cursor.rowcount > 0
+
+    def log_notification_delivery(
+        self,
+        *,
+        channel: str,
+        status: str,
+        detail: str = "",
+        endpoint: str = "",
+        user_id: int | None = None,
+        thread_id: int | None = None,
+        message_id: int | None = None,
+        character_id: int | None = None,
+    ) -> int:
+        """Record a non-secret notification delivery diagnostic row."""
+
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """INSERT INTO notification_deliveries(
+                    timestamp, channel, status, detail, endpoint, endpoint_host, user_id,
+                    thread_id, message_id, character_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    iso(),
+                    channel,
+                    status,
+                    detail[:1000],
+                    endpoint,
+                    _endpoint_host(endpoint) if endpoint else "",
+                    user_id,
+                    thread_id,
+                    message_id,
+                    character_id,
+                ),
+            )
+        return int(cursor.lastrowid)
+
+    def list_notification_deliveries(
+        self,
+        user_id: int | None | object = _ANY,
+        *,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return recent notification diagnostics for admin/support screens."""
+
+        clause = ""
+        params: list[Any] = []
+        if user_id is not _ANY:
+            if user_id is None:
+                clause = "WHERE nd.user_id IS NULL"
+            else:
+                clause = "WHERE nd.user_id = ?"
+                params.append(user_id)
+        params.append(limit)
+        with self.connection() as connection:
+            rows = connection.execute(
+                f"""SELECT nd.*, u.username AS owner_username, u.display_name AS owner_display_name
+                    FROM notification_deliveries nd
+                    LEFT JOIN users u ON u.id = nd.user_id
+                    {clause}
+                    ORDER BY nd.timestamp DESC
+                    LIMIT ?""",
+                tuple(params),
+            ).fetchall()
+        results = []
+        for row in rows:
+            result = dict(row)
+            result["owner_label"] = self._thread_owner_label(result)
+            result["endpoint_preview"] = _endpoint_preview(str(result.get("endpoint") or ""))
+            result.pop("endpoint", None)
+            results.append(result)
+        return results
 
     def create_user(
         self,

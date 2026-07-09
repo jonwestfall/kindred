@@ -91,6 +91,46 @@ export interface NotificationTestResult {
   message: Message;
 }
 
+export interface NotificationSubscription {
+  id: number;
+  user_id: number | null;
+  owner_label: string;
+  owner_username?: string | null;
+  owner_display_name?: string | null;
+  endpoint_host: string;
+  endpoint_preview: string;
+  created_at: string;
+  has_keys: boolean;
+}
+
+export interface NotificationDelivery {
+  id: number;
+  timestamp: string;
+  channel: string;
+  status: "sent" | "failed" | "expired" | "skipped";
+  detail: string;
+  endpoint_host: string;
+  endpoint_preview: string;
+  user_id: number | null;
+  owner_label: string;
+  owner_username?: string | null;
+  owner_display_name?: string | null;
+  thread_id?: number | null;
+  message_id?: number | null;
+  character_id?: number | null;
+}
+
+export interface NotificationDiagnostics {
+  scope: "mine" | "all";
+  notifications_enabled: boolean;
+  web_push_configured: boolean;
+  vapid_subject: string;
+  active_websocket_count: number;
+  subscription_count: number;
+  subscriptions: NotificationSubscription[];
+  recent_deliveries: NotificationDelivery[];
+}
+
 export interface LogRecord extends Message {
   character_name: string;
   thread_title: string;

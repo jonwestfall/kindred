@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api";
-import type { Character, UserAccount, UserDraft } from "../../types";
+import type { Character, NotificationDiagnostics, UserAccount, UserDraft } from "../../types";
 import { Icon } from "../../components/Icon";
+import { formatDateTime } from "../../utils";
 
 const emptyDraft: UserDraft = {
   username: "",
@@ -133,11 +134,123 @@ function AccountForm({
   );
 }
 
+function NotificationDiagnosticsPanel({
+  diagnostics,
+  note,
+  onRefresh,
+  onDeleteSubscription,
+}: {
+  diagnostics: NotificationDiagnostics | null;
+  note: string;
+  onRefresh: () => Promise<void>;
+  onDeleteSubscription: (subscriptionId: number) => Promise<void>;
+}) {
+  return (
+    <section className="admin-test-card notification-diagnostics-card" aria-labelledby="notification-diagnostics-heading">
+      <div className="diagnostics-heading">
+        <div>
+          <h2 id="notification-diagnostics-heading">Notification diagnostics</h2>
+          <p>
+            Inspect saved browser push subscriptions, active in-app WebSocket connections, and
+            recent Web Push attempts. Use this when testing iPhone/Tailscale delivery.
+          </p>
+        </div>
+        <button className="secondary-button" type="button" onClick={() => void onRefresh()}>
+          Refresh
+        </button>
+      </div>
+      {note ? <p className="form-error">{note}</p> : null}
+      {diagnostics ? (
+        <>
+          <div className="diagnostic-metrics">
+            <span>
+              <strong>{diagnostics.notifications_enabled ? "On" : "Off"}</strong>
+              Notifications setting
+            </span>
+            <span>
+              <strong>{diagnostics.web_push_configured ? "Ready" : "Missing"}</strong>
+              VAPID / Web Push
+            </span>
+            <span>
+              <strong>{diagnostics.subscription_count}</strong>
+              Saved subscription(s)
+            </span>
+            <span>
+              <strong>{diagnostics.active_websocket_count}</strong>
+              Active socket(s)
+            </span>
+          </div>
+          <p className="diagnostic-subtle">VAPID subject: {diagnostics.vapid_subject}</p>
+          <div className="diagnostic-columns">
+            <div>
+              <h3>Subscriptions</h3>
+              {diagnostics.subscriptions.length === 0 ? (
+                <p className="empty-copy">No saved browser subscriptions yet.</p>
+              ) : null}
+              {diagnostics.subscriptions.map((subscription) => (
+                <article className="diagnostic-row" key={subscription.id}>
+                  <div>
+                    <strong>{subscription.endpoint_host || "Unknown endpoint"}</strong>
+                    <span>{subscription.endpoint_preview}</span>
+                    <small>
+                      {subscription.owner_label} · subscribed {formatDateTime(subscription.created_at)} ·{" "}
+                      {subscription.has_keys ? "keys present" : "missing keys"}
+                    </small>
+                  </div>
+                  <button
+                    className="icon-button danger"
+                    type="button"
+                    aria-label={`Remove subscription ${subscription.id}`}
+                    onClick={() => {
+                      if (!window.confirm("Remove this saved browser notification subscription?")) return;
+                      void onDeleteSubscription(subscription.id);
+                    }}
+                  >
+                    <Icon name="trash" />
+                  </button>
+                </article>
+              ))}
+            </div>
+            <div>
+              <h3>Recent Web Push attempts</h3>
+              {diagnostics.recent_deliveries.length === 0 ? (
+                <p className="empty-copy">No delivery attempts logged yet.</p>
+              ) : null}
+              {diagnostics.recent_deliveries.map((delivery) => (
+                <article className="diagnostic-row diagnostic-row--attempt" key={delivery.id}>
+                  <div>
+                    <strong>
+                      <span className={`status-pill status-pill--${delivery.status}`}>
+                        {delivery.status}
+                      </span>
+                      {delivery.endpoint_host || "No endpoint"}
+                    </strong>
+                    <span>{delivery.detail}</span>
+                    <small>
+                      {delivery.owner_label} · {formatDateTime(delivery.timestamp)}
+                      {delivery.thread_id ? ` · thread #${delivery.thread_id}` : ""}
+                      {delivery.message_id ? ` · message #${delivery.message_id}` : ""}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="empty-copy">Notification diagnostics have not loaded yet.</p>
+      )}
+    </section>
+  );
+}
+
 export function AdminPage({ characters }: { characters: Character[] }) {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [editing, setEditing] = useState<UserAccount | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [diagnostics, setDiagnostics] = useState<NotificationDiagnostics | null>(null);
+  const [diagnosticsNote, setDiagnosticsNote] = useState("");
   const [testCharacterId, setTestCharacterId] = useState("");
   const [testResult, setTestResult] = useState("");
   const characterNames = useMemo(
@@ -145,8 +258,22 @@ export function AdminPage({ characters }: { characters: Character[] }) {
     [characters],
   );
 
+  async function refreshDiagnostics() {
+    setDiagnosticsNote("");
+    try {
+      setDiagnostics(await api.notificationDiagnostics("all"));
+    } catch (caught) {
+      setDiagnosticsNote(caught instanceof Error ? caught.message : "Diagnostics failed.");
+    }
+  }
+
   async function refresh() {
-    setUsers(await api.users.list());
+    const [nextUsers, nextDiagnostics] = await Promise.all([
+      api.users.list(),
+      api.notificationDiagnostics("all"),
+    ]);
+    setUsers(nextUsers);
+    setDiagnostics(nextDiagnostics);
   }
 
   useEffect(() => {
@@ -181,6 +308,7 @@ export function AdminPage({ characters }: { characters: Character[] }) {
           `${result.subscription_count} saved subscription(s) for this signed-in account.`,
         ].join(" "),
       );
+      await refreshDiagnostics();
     } catch (caught) {
       setTestResult(caught instanceof Error ? caught.message : "Notification test failed.");
     }
@@ -305,6 +433,15 @@ export function AdminPage({ characters }: { characters: Character[] }) {
           character now.
         </p>
       </section>
+      <NotificationDiagnosticsPanel
+        diagnostics={diagnostics}
+        note={diagnosticsNote}
+        onRefresh={refreshDiagnostics}
+        onDeleteSubscription={async (subscriptionId) => {
+          await api.deleteNotificationSubscription(subscriptionId);
+          await refreshDiagnostics();
+        }}
+      />
     </section>
   );
 }

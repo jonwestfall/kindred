@@ -58,3 +58,6 @@ versioning once the first release is tagged.
   budget slot.
 - Chat threads can now be searched by character/title/owner/message preview,
   renamed, deleted, and explicitly split into new per-character threads.
+- Notification diagnostics now list saved browser subscriptions, active
+  WebSocket count, recent Web Push delivery attempts, stale endpoint pruning,
+  and administrator subscription removal.

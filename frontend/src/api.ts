@@ -7,6 +7,7 @@ import type {
   LorePack,
   LogRecord,
   Message,
+  NotificationDiagnostics,
   NotificationTestResult,
   SessionInfo,
   Thread,
@@ -185,6 +186,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ character_id: characterId, content }),
     }),
+  notificationDiagnostics: (scope: "mine" | "all" = "mine") =>
+    request<NotificationDiagnostics>(`/notifications/diagnostics?scope=${scope}`),
+  deleteNotificationSubscription: (subscriptionId: number) =>
+    request<void>(`/notifications/subscriptions/${subscriptionId}`, { method: "DELETE" }),
 };
 
 export function exportUrl(

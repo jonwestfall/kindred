@@ -96,6 +96,13 @@ Web Push.
 9. Open Activity and search for `notification test` or the test message text.
    The row should be logged with backend `kindred`, model
    `notification-test`, and `initiated`.
+10. Return to Admin → Notification diagnostics and confirm:
+
+    - the iPhone subscription appears under Subscriptions with the expected
+      owner;
+    - Active socket(s) is at least `1` if a Kindred tab/app is currently open;
+    - Recent Web Push attempts shows `sent` for a successful background push,
+      or a clear `skipped`/`failed`/`expired` reason.
 
 ## Admin interface full-daemon test
 
@@ -269,6 +276,15 @@ not impersonate regular users.
   `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`; restart Kindred.
 - `subscription_count` is `0`: the tested account has not subscribed from this
   exact origin. Open the Tailscale HTTPS URL on the device and tap the bell.
+- Admin → Notification diagnostics shows `skipped`: read the detail text. Common
+  reasons are disabled notifications, missing VAPID keys, missing `pywebpush`,
+  or no saved subscription for the targeted account.
+- Admin → Notification diagnostics shows `expired`: the browser push service
+  rejected the saved endpoint and Kindred removed it. Reopen Kindred on that
+  device and tap the bell to create a fresh subscription.
+- Admin → Notification diagnostics shows `failed`: the browser push endpoint was
+  contacted but rejected the request. Check outbound internet, VAPID settings,
+  and the device/browser notification settings.
 - iPhone receives nothing while locked: launch Kindred from the Home Screen
   icon, not a plain Safari tab, then tap the bell again.
 - Open app updates but no system notification appears: WebSocket works; check

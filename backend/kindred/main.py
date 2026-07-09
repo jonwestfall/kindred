@@ -66,6 +66,7 @@ from .schemas import (
     LorePackFile,
     LoginRequest,
     LoginResponse,
+    NotificationDiagnostics,
     Message,
     NotificationTestRequest,
     NotificationTestResult,
@@ -985,10 +986,73 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
     @app.delete("/api/notifications/subscribe", status_code=204, tags=["notifications"])
     async def unsubscribe(
         request: Request,
-        _: Principal = Depends(authenticate_request),
+        principal: Principal = Depends(authenticate_request),
     ) -> Response:
         body = await request.json()
-        database.delete_subscription(body.get("endpoint", ""))
+        database.delete_subscription(
+            body.get("endpoint", ""),
+            user_id=principal.user_id,
+            include_all=principal.is_admin,
+        )
+        return Response(status_code=204)
+
+    @app.get(
+        "/api/notifications/diagnostics",
+        response_model=NotificationDiagnostics,
+        tags=["notifications"],
+    )
+    def notification_diagnostics(
+        scope: Literal["mine", "all"] = "mine",
+        limit: int = Query(default=25, ge=1, le=100),
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, Any]:
+        """Inspect saved browser subscriptions and recent Web Push attempts."""
+
+        if scope == "all" and not principal.is_admin:
+            raise HTTPException(403, "Administrator access required for all notification diagnostics")
+        include_all = principal.is_admin and scope == "all"
+        subscriptions = (
+            database.list_subscription_records()
+            if include_all
+            else database.list_subscription_records(principal.user_id)
+        )
+        recent_deliveries = (
+            database.list_notification_deliveries(limit=limit)
+            if include_all
+            else database.list_notification_deliveries(principal.user_id, limit=limit)
+        )
+        active_websocket_count = (
+            len(notifications.sockets)
+            if include_all
+            else sum(1 for socket_principal in notifications.sockets.values() if socket_principal.user_id == principal.user_id)
+        )
+        return {
+            "scope": scope,
+            "notifications_enabled": bool(
+                database.get_settings().get("notifications", {}).get("enabled", True)
+            ),
+            "web_push_configured": bool(settings.vapid_private_key and settings.vapid_public_key),
+            "vapid_subject": settings.vapid_subject,
+            "active_websocket_count": active_websocket_count,
+            "subscription_count": len(subscriptions),
+            "subscriptions": subscriptions,
+            "recent_deliveries": recent_deliveries,
+        }
+
+    @app.delete("/api/notifications/subscriptions/{subscription_id}", status_code=204, tags=["notifications"])
+    def delete_notification_subscription(
+        subscription_id: int,
+        principal: Principal = Depends(authenticate_request),
+    ) -> Response:
+        """Remove one saved browser subscription visible to the caller."""
+
+        deleted = database.delete_subscription_by_id(
+            subscription_id,
+            user_id=principal.user_id,
+            include_all=principal.is_admin,
+        )
+        if not deleted:
+            raise HTTPException(404, "Subscription not found")
         return Response(status_code=204)
 
     @app.post(

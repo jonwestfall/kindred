@@ -159,3 +159,49 @@ def test_admin_thread_listing_defaults_to_own_scope_and_all_scope_is_explicit(tm
         user_default = client.get("/api/threads", headers=user_headers).json()
         assert {thread["id"] for thread in user_default} == {user_thread["id"]}
         assert client.get("/api/threads?scope=all", headers=user_headers).status_code == 403
+
+
+def test_notification_diagnostics_are_account_scoped(tmp_path: Path):
+    app = create_app(auth_settings(tmp_path / "notification-scope-test.db"))
+    with TestClient(app) as client:
+        admin_headers = login(client, "root", "correct-horse-battery-staple")
+        character = client.get("/api/characters", headers=admin_headers).json()[0]
+        user = client.post(
+            "/api/users",
+            headers=admin_headers,
+            json={
+                "username": "reader",
+                "display_name": "Reader",
+                "password": "local-password",
+                "character_ids": [character["id"]],
+            },
+        ).json()
+        app.state.database.save_subscription(
+            {
+                "endpoint": "https://push.example.test/admin-device",
+                "keys": {"p256dh": "admin-key", "auth": "admin-auth"},
+            },
+            user_id=None,
+        )
+        app.state.database.save_subscription(
+            {
+                "endpoint": "https://push.example.test/reader-device",
+                "keys": {"p256dh": "reader-key", "auth": "reader-auth"},
+            },
+            user_id=user["id"],
+        )
+
+        user_headers = login(client, "reader", "local-password")
+        user_diagnostics = client.get("/api/notifications/diagnostics", headers=user_headers).json()
+        assert user_diagnostics["subscription_count"] == 1
+        assert user_diagnostics["subscriptions"][0]["owner_label"] == "Reader"
+        assert client.get(
+            "/api/notifications/diagnostics?scope=all",
+            headers=user_headers,
+        ).status_code == 403
+
+        admin_all = client.get(
+            "/api/notifications/diagnostics?scope=all",
+            headers=admin_headers,
+        ).json()
+        assert admin_all["subscription_count"] == 2

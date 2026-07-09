@@ -27,6 +27,33 @@ navigates an already-open same-origin Kindred window to that thread.
 Permission may be denied permanently for an origin. Reset it in browser site
 settings before retrying.
 
+## Subscription diagnostics
+
+Administrators can inspect notification state in Admin → Notification
+diagnostics. The panel shows:
+
+- whether Kindred notifications are enabled;
+- whether VAPID/Web Push is configured;
+- active in-app WebSocket connections;
+- saved browser push subscriptions by owner and endpoint host;
+- recent Web Push delivery attempts with `sent`, `failed`, `expired`, or
+  `skipped` status.
+
+The diagnostics API intentionally exposes endpoint host and a shortened endpoint
+preview, but not browser subscription keys. Removing a subscription from the
+Admin panel deletes only Kindred's saved copy; the browser may create a new
+subscription the next time the user taps the bell.
+
+API equivalents:
+
+```bash
+curl "$BASE/api/notifications/diagnostics?scope=all" \
+  -H "authorization: Bearer $TOKEN"
+
+curl -X DELETE "$BASE/api/notifications/subscriptions/1" \
+  -H "authorization: Bearer $TOKEN"
+```
+
 ## Generate VAPID keys
 
 ```bash
@@ -112,6 +139,7 @@ with your privacy requirements.
 - Confirm the private key path is readable by Kindred.
 - Confirm `window.isSecureContext` is true.
 - Expired subscriptions are removed after a push endpoint returns `404`/`410`;
-  click the bell again to subscribe.
+  this is recorded as `expired` in Admin → Notification diagnostics. Click the
+  bell again to subscribe.
 - iOS/iPadOS Web Push is intended for Home Screen web apps; add Kindred to the
   Home Screen from the HTTPS origin, launch that icon, and subscribe there.

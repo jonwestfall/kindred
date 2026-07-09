@@ -1388,6 +1388,141 @@ p {
   border-top: 1px solid var(--line);
 }
 
+.notification-diagnostics-card {
+  margin-top: 18px;
+}
+
+.diagnostics-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.diagnostic-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.diagnostic-metrics span {
+  display: grid;
+  gap: 4px;
+  min-height: 68px;
+  padding: 13px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--wash);
+  font-size: 11px;
+}
+
+.diagnostic-metrics strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.diagnostic-subtle {
+  max-width: none !important;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  background: #faf8fb;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.diagnostic-columns h3 {
+  margin: 0 0 9px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.diagnostic-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.diagnostic-row + .diagnostic-row {
+  margin-top: 8px;
+}
+
+.diagnostic-row--attempt {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.diagnostic-row div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.diagnostic-row strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagnostic-row span,
+.diagnostic-row small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-width: auto !important;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px !important;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-pill--sent {
+  color: #0d6d3b !important;
+  background: #e8f7ee;
+}
+
+.status-pill--failed {
+  color: #9d1f2d !important;
+  background: #fdecef;
+}
+
+.status-pill--expired {
+  color: #8a4b00 !important;
+  background: #fff2d8;
+}
+
+.status-pill--skipped {
+  color: #565865 !important;
+  background: #eef0f4;
+}
+
 .form-heading {
   display: flex;
   align-items: center;
@@ -1934,6 +2069,21 @@ p {
 
   .notification-test-form {
     grid-template-columns: 1fr;
+  }
+
+  .diagnostics-heading {
+    display: grid;
+  }
+
+  .diagnostic-metrics,
+  .diagnostic-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .diagnostic-row strong,
+  .diagnostic-row span,
+  .diagnostic-row small {
+    white-space: normal;
   }
 
   .lore-pack-card {
