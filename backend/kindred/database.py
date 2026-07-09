@@ -673,6 +673,26 @@ class Database:
             thread_id = cursor.lastrowid
         return self.get_thread(int(thread_id))  # type: ignore[arg-type, return-value]
 
+    def update_thread(self, thread_id: int, *, title: str) -> dict[str, Any] | None:
+        """Rename a conversation thread and bump its list ordering timestamp."""
+
+        now = iso()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                "UPDATE threads SET title = ?, updated_at = ? WHERE id = ?",
+                (title, now, thread_id),
+            )
+        if cursor.rowcount == 0:
+            return None
+        return self.get_thread(thread_id)
+
+    def delete_thread(self, thread_id: int) -> bool:
+        """Delete one thread and its messages through SQLite cascading FKs."""
+
+        with self.connection() as connection:
+            cursor = connection.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
+        return cursor.rowcount > 0
+
     def get_thread(self, thread_id: int) -> dict[str, Any] | None:
         with self.connection() as connection:
             row = connection.execute(

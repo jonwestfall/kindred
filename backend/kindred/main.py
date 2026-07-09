@@ -73,6 +73,7 @@ from .schemas import (
     SettingsUpdate,
     SystemResetRequest,
     ThreadCreate,
+    ThreadUpdate,
     UserCreate,
     UserOut,
     UserUpdate,
@@ -622,6 +623,35 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
             raise HTTPException(404, "Character not found")
         _require_character_access(payload.character_id, principal)
         return database.create_thread(payload.character_id, payload.title, user_id=principal.user_id)
+
+    @app.patch("/api/threads/{thread_id}", tags=["chat"])
+    def update_thread(
+        thread_id: int,
+        payload: ThreadUpdate,
+        principal: Principal = Depends(authenticate_request),
+    ) -> dict[str, Any]:
+        """Rename a conversation thread after verifying account ownership."""
+
+        _require_thread_access(thread_id, principal)
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(422, "Thread title cannot be blank")
+        updated = database.update_thread(thread_id, title=title)
+        if not updated:
+            raise HTTPException(404, "Thread not found")
+        return updated
+
+    @app.delete("/api/threads/{thread_id}", status_code=204, tags=["chat"])
+    def delete_thread(
+        thread_id: int,
+        principal: Principal = Depends(authenticate_request),
+    ) -> Response:
+        """Delete a conversation thread and its messages."""
+
+        _require_thread_access(thread_id, principal)
+        if not database.delete_thread(thread_id):
+            raise HTTPException(404, "Thread not found")
+        return Response(status_code=204)
 
     @app.get("/api/threads/{thread_id}/messages", response_model=list[Message], tags=["chat"])
     def list_messages(

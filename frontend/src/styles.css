@@ -536,6 +536,30 @@ p {
   white-space: nowrap;
 }
 
+.conversation-thread-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 180px;
+  padding: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.conversation-empty p {
+  margin: 0;
+  font-size: 12px;
+}
+
 .avatar {
   display: inline-grid;
   flex: 0 0 auto;
@@ -593,18 +617,38 @@ p {
   border-bottom: 1px solid var(--line);
 }
 
-.chat-header > div {
+.chat-header > div:not(.chat-header-actions) {
   display: grid;
+  min-width: 0;
   gap: 4px;
 }
 
 .chat-header strong {
+  overflow: hidden;
   font-size: 14px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-header span {
+  overflow: hidden;
   color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.compact-button {
+  min-height: 34px;
+  padding-inline: 11px;
   font-size: 11px;
 }
 
@@ -1722,11 +1766,24 @@ p {
   .chat-header {
     min-height: 65px;
     padding: 0 13px;
+    gap: 9px;
   }
 
   .chat-header .avatar {
     width: 41px;
     height: 41px;
+  }
+
+  .chat-header-actions {
+    gap: 2px;
+  }
+
+  .chat-header-actions .compact-button {
+    width: 38px;
+    min-width: 38px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
   }
 
   .messages {

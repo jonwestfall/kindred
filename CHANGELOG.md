@@ -56,3 +56,5 @@ versioning once the first release is tagged.
 - Cloud chat and image-provider attempts now reserve usage budget in SQLite
   before dispatch so simultaneous requests cannot spend the same remaining
   budget slot.
+- Chat threads can now be searched by character/title/owner/message preview,
+  renamed, deleted, and explicitly split into new per-character threads.

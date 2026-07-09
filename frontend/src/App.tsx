@@ -218,6 +218,55 @@ export default function App() {
     setView("chat");
   }
 
+  async function createFreshThread(character: Character) {
+    const title = window.prompt(`New thread with ${character.name}`, "Conversation");
+    if (title === null) return;
+    const cleanedTitle = title.trim() || "Conversation";
+    try {
+      const created = await api.threads.create(character.id, cleanedTitle);
+      const nextThreads = await api.threads.list();
+      setThreads(nextThreads);
+      setSelectedThread(nextThreads.find((thread) => thread.id === created.id) ?? created);
+      setView("chat");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Thread could not be created.");
+    }
+  }
+
+  async function renameThread(thread: Thread) {
+    const title = window.prompt("Rename this thread", thread.title);
+    if (title === null) return;
+    const cleanedTitle = title.trim();
+    if (!cleanedTitle || cleanedTitle === thread.title) return;
+    try {
+      const updated = await api.threads.update(thread.id, cleanedTitle);
+      const nextThreads = await api.threads.list();
+      setThreads(nextThreads);
+      setSelectedThread(nextThreads.find((candidate) => candidate.id === updated.id) ?? updated);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Thread could not be renamed.");
+    }
+  }
+
+  async function deleteThread(thread: Thread) {
+    const confirmed = window.confirm(
+      `Delete "${thread.title}" with ${thread.character_name}? This removes the local messages in this thread.`,
+    );
+    if (!confirmed) return;
+    try {
+      await api.threads.remove(thread.id);
+      const nextThreads = await api.threads.list();
+      setThreads(nextThreads);
+      setSelectedThread((current) => {
+        if (current?.id !== thread.id) return current;
+        return nextThreads[0] ?? null;
+      });
+      if (selectedThread?.id === thread.id) setMessages([]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Thread could not be deleted.");
+    }
+  }
+
   async function saveCharacter(draft: CharacterDraft) {
     if (editing && editing !== "new") {
       await api.characters.update(editing.id, draft);
@@ -244,6 +293,9 @@ export default function App() {
         loading={messagesLoading}
         onSelectThread={setSelectedThread}
         onCreateThread={openCharacterChat}
+        onCreateFreshThread={createFreshThread}
+        onRenameThread={renameThread}
+        onDeleteThread={deleteThread}
         onMessageSent={reloadSelected}
       />
     );

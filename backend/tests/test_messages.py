@@ -35,3 +35,27 @@ def test_message_logging_includes_audit_fields(database):
     assert len(logs) == 1
     assert logs[0]["thread_title"] == "First light"
 
+
+def test_thread_rename_and_delete_routes(client):
+    character = client.post(
+        "/api/characters",
+        json={"name": "Mira Threads", "model": "tiny-model"},
+    ).json()
+    thread = client.post(
+        "/api/threads",
+        json={"character_id": character["id"], "title": "First light"},
+    ).json()
+
+    updated = client.patch(
+        f"/api/threads/{thread['id']}",
+        json={"title": "Moonlit platform"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "Moonlit platform"
+
+    threads = client.get("/api/threads").json()
+    assert threads[0]["title"] == "Moonlit platform"
+
+    deleted = client.delete(f"/api/threads/{thread['id']}")
+    assert deleted.status_code == 204
+    assert client.get(f"/api/threads/{thread['id']}/messages").status_code == 404

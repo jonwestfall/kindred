@@ -3,7 +3,7 @@
 ## MVP — implemented
 
 - Local SQLite character CRUD and duplication
-- SMS-style responsive chat and multiple threads
+- SMS-style responsive chat with searchable, renameable, deletable threads
 - Ollama and llama.cpp adapters
 - Optional OpenAI-compatible adapter with dry run and budgets
 - Autonomous daemon with quiet hours, cooldowns, randomness, and global limits
@@ -16,15 +16,13 @@
 
 ## 0.2 — hardening
 
-- Versioned SQLite migrations and backup/restore UI
 - Auth hardening: CSRF defenses, HttpOnly-cookie option, password policy hints,
   and clearer session/device management
 - CSRF protection for subscription and mutation endpoints
-- Atomic cloud-budget reservation for concurrent requests
 - Streaming model responses with cancellation
 - Notification subscription management and delivery diagnostics
 - Daemon run history and next-window explanation in the UI
-- Per-character thread rename, archive, and deletion controls
+- Thread archive/hide controls for preserving old conversations without deleting
 - Manual lore re-indexing and embedding health diagnostics
 - Keyboard, screen-reader, contrast, and motion accessibility audit
 

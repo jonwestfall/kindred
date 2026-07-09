@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, api } from "../../api";
 import type { Character, Message, Thread } from "../../types";
@@ -19,7 +19,33 @@ function ConversationList({
   onSelectThread: (thread: Thread) => void;
   onSelectCharacter: (character: Character) => void;
 }) {
-  const threadCharacterIds = new Set(threads.map((thread) => thread.character_id));
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleThreads = useMemo(() => {
+    if (!normalizedQuery) return threads;
+    return threads.filter((thread) =>
+      [
+        thread.character_name,
+        thread.title,
+        thread.owner_label,
+        thread.last_message ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery),
+    );
+  }, [normalizedQuery, threads]);
+  const starterCharacters = useMemo(() => {
+    const threadCharacterIds = new Set(threads.map((thread) => thread.character_id));
+    const available = characters.filter((character) => !threadCharacterIds.has(character.id));
+    if (!normalizedQuery) return available;
+    return available.filter((character) =>
+      [character.name, character.description, character.model]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery),
+    );
+  }, [characters, normalizedQuery, threads]);
   return (
     <section className="conversation-list" aria-label="Conversations">
       <div className="pane-title">
@@ -30,47 +56,108 @@ function ConversationList({
       </div>
       <div className="search-field compact">
         <Icon name="search" size={17} />
-        <input aria-label="Search conversations" placeholder="Search conversations" />
+        <input
+          aria-label="Search conversations"
+          placeholder="Search conversations"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
       </div>
       <div className="conversation-rows">
-        {threads.map((thread) => (
+        {visibleThreads.map((thread) => {
+          const threadTitle = thread.title || "Conversation";
+          return (
+            <button
+              key={thread.id}
+              type="button"
+              className={`conversation-row ${selectedId === thread.id ? "is-selected" : ""}`}
+              onClick={() => onSelectThread(thread)}
+            >
+              <Avatar name={thread.character_name} src={thread.avatar_url} />
+              <span className="conversation-copy">
+                <span className="conversation-name">
+                  <strong>{thread.character_name}</strong>
+                  <time>{formatTime(thread.last_message_at ?? thread.updated_at)}</time>
+                </span>
+                <small className="conversation-thread-title">{threadTitle}</small>
+                <small className="conversation-owner">Owner: {thread.owner_label}</small>
+                <span>{thread.last_message || "Start a conversation"}</span>
+              </span>
+            </button>
+          );
+        })}
+        {starterCharacters.map((character) => (
           <button
-            key={thread.id}
+            key={`new-${character.id}`}
             type="button"
-            className={`conversation-row ${selectedId === thread.id ? "is-selected" : ""}`}
-            onClick={() => onSelectThread(thread)}
+            className="conversation-row"
+            onClick={() => onSelectCharacter(character)}
           >
-            <Avatar name={thread.character_name} src={thread.avatar_url} />
+            <Avatar name={character.name} src={character.avatar_url} />
             <span className="conversation-copy">
               <span className="conversation-name">
-                <strong>{thread.character_name}</strong>
-                <time>{formatTime(thread.last_message_at ?? thread.updated_at)}</time>
+                <strong>{character.name}</strong>
               </span>
-              <small className="conversation-owner">Owner: {thread.owner_label}</small>
-              <span>{thread.last_message || "Start a conversation"}</span>
+              <small className="conversation-thread-title">New conversation</small>
+              <span>No messages yet</span>
             </span>
           </button>
         ))}
-        {characters
-          .filter((character) => !threadCharacterIds.has(character.id))
-          .map((character) => (
-            <button
-              key={`new-${character.id}`}
-              type="button"
-              className="conversation-row"
-              onClick={() => onSelectCharacter(character)}
-            >
-              <Avatar name={character.name} src={character.avatar_url} />
-              <span className="conversation-copy">
-                <span className="conversation-name">
-                  <strong>{character.name}</strong>
-                </span>
-                <span>No messages yet</span>
-              </span>
-            </button>
-          ))}
+        {visibleThreads.length === 0 && starterCharacters.length === 0 ? (
+          <div className="conversation-empty">
+            <Icon name="search" size={20} />
+            <p>
+              {normalizedQuery
+                ? "No conversations match that search."
+                : "No conversations yet."}
+            </p>
+          </div>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function ThreadActions({
+  character,
+  thread,
+  onCreateFreshThread,
+  onRenameThread,
+  onDeleteThread,
+}: {
+  character: Character;
+  thread: Thread;
+  onCreateFreshThread: (character: Character) => Promise<void>;
+  onRenameThread: (thread: Thread) => Promise<void>;
+  onDeleteThread: (thread: Thread) => Promise<void>;
+}) {
+  return (
+    <div className="chat-header-actions">
+      <button
+        className="secondary-button compact-button"
+        type="button"
+        onClick={() => void onCreateFreshThread(character)}
+      >
+        <Icon name="plus" size={15} />
+        New thread
+      </button>
+      <button
+        className="icon-button"
+        type="button"
+        aria-label="Rename thread"
+        onClick={() => void onRenameThread(thread)}
+      >
+        <Icon name="edit" />
+      </button>
+      <button
+        className="icon-button danger"
+        type="button"
+        aria-label="Delete thread"
+        onClick={() => void onDeleteThread(thread)}
+      >
+        <Icon name="trash" />
+      </button>
+    </div>
   );
 }
 
@@ -98,6 +185,9 @@ export function ChatPage({
   loading,
   onSelectThread,
   onCreateThread,
+  onCreateFreshThread,
+  onRenameThread,
+  onDeleteThread,
   onMessageSent,
 }: {
   characters: Character[];
@@ -107,6 +197,9 @@ export function ChatPage({
   loading: boolean;
   onSelectThread: (thread: Thread) => void;
   onCreateThread: (character: Character) => Promise<void>;
+  onCreateFreshThread: (character: Character) => Promise<void>;
+  onRenameThread: (thread: Thread) => Promise<void>;
+  onDeleteThread: (thread: Thread) => Promise<void>;
   onMessageSent: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
@@ -157,14 +250,19 @@ export function ChatPage({
               <div>
                 <strong>{selectedCharacter.name}</strong>
                 <span>
+                  {selectedThread.title || "Conversation"} ·{" "}
                   {selectedCharacter.backend === "openai_compatible"
                     ? "Cloud backend enabled"
                     : `${selectedCharacter.backend} · ${selectedCharacter.model}`}
                 </span>
               </div>
-              <button className="icon-button" type="button" aria-label="Conversation information">
-                <Icon name="info" />
-              </button>
+              <ThreadActions
+                character={selectedCharacter}
+                thread={selectedThread}
+                onCreateFreshThread={onCreateFreshThread}
+                onRenameThread={onRenameThread}
+                onDeleteThread={onDeleteThread}
+              />
             </header>
             {selectedCharacter.backend === "openai_compatible" ? (
               <div className="cloud-warning">

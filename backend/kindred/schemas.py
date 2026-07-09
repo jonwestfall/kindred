@@ -167,6 +167,13 @@ class ThreadCreate(BaseModel):
     title: str = Field(default="Conversation", min_length=1, max_length=200)
 
 
+class ThreadUpdate(BaseModel):
+    """Rename or otherwise update a conversation thread."""
+
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=200)
+
+
 class ChatRequest(BaseModel):
     """A user-authored message."""
 

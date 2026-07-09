@@ -123,11 +123,17 @@ export const api = {
   },
   threads: {
     list: (scope: "mine" | "all" = "mine") => request<Thread[]>(`/threads?scope=${scope}`),
-    create: (characterId: number) =>
+    create: (characterId: number, title = "Conversation") =>
       request<Thread>("/threads", {
         method: "POST",
-        body: JSON.stringify({ character_id: characterId, title: "Conversation" }),
+        body: JSON.stringify({ character_id: characterId, title }),
       }),
+    update: (threadId: number, title: string) =>
+      request<Thread>(`/threads/${threadId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      }),
+    remove: (threadId: number) => request<void>(`/threads/${threadId}`, { method: "DELETE" }),
     messages: (threadId: number) => request<Message[]>(`/threads/${threadId}/messages`),
     send: (threadId: number, content: string) =>
       request<Message>(`/threads/${threadId}/messages`, {
