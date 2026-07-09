@@ -865,9 +865,9 @@ class Database:
         estimated_cost_usd: float = 0,
         dry_run: bool = False,
         character_id: int | None = None,
-    ) -> None:
+    ) -> int:
         with self.connection() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """INSERT INTO usage_logs(
                     timestamp, provider, model, request_kind, input_tokens, output_tokens,
                     estimated_cost_usd, dry_run, character_id
@@ -884,19 +884,55 @@ class Database:
                     character_id,
                 ),
             )
+        return int(cursor.lastrowid)
 
-    def usage_since(self, since: datetime, request_kind: str | None = None) -> dict[str, float]:
+    def update_usage_log(
+        self,
+        usage_id: int,
+        *,
+        input_tokens: int,
+        output_tokens: int,
+        estimated_cost_usd: float,
+        dry_run: bool,
+    ) -> None:
+        """Update a preflight usage reservation with observed final usage."""
+
+        with self.connection() as connection:
+            connection.execute(
+                """UPDATE usage_logs
+                   SET input_tokens = ?, output_tokens = ?, estimated_cost_usd = ?, dry_run = ?
+                   WHERE id = ?""",
+                (input_tokens, output_tokens, estimated_cost_usd, int(dry_run), usage_id),
+            )
+
+    def usage_since(
+        self,
+        since: datetime,
+        request_kind: str | None = None,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict[str, float]:
         clause = "AND request_kind = ?" if request_kind else ""
         params: tuple[Any, ...] = (iso(since), request_kind) if request_kind else (iso(since),)
-        with self.connection() as connection:
-            row = connection.execute(
+
+        def query(active: sqlite3.Connection) -> dict[str, float]:
+            row = active.execute(
                 f"""SELECT COUNT(*) AS requests,
                            COALESCE(SUM(input_tokens + output_tokens), 0) AS tokens,
                            COALESCE(SUM(estimated_cost_usd), 0) AS cost
                     FROM usage_logs WHERE timestamp >= ? {clause}""",
                 params,
             ).fetchone()
-        return {"requests": float(row["requests"]), "tokens": float(row["tokens"]), "cost": float(row["cost"])}
+            return {
+                "requests": float(row["requests"]),
+                "tokens": float(row["tokens"]),
+                "cost": float(row["cost"]),
+            }
+
+        if connection is not None:
+            return query(connection)
+        with self.connection() as active:
+            return query(active)
 
     def search_logs(
         self,

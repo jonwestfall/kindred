@@ -351,37 +351,44 @@ class LLMService:
     ) -> LLMResult:
         model = character["model"]
         input_estimate = approximate_tokens(prompt_text)
+        reservation_id: int | None = None
         if cloud:
-            preflight_cost = (input_estimate * 0.0000005) + (512 * 0.0000015)
-            self.limiter.check_cloud(
-                input_estimate + 512,
+            output_allowance = 512
+            preflight_cost = (input_estimate * 0.0000005) + (output_allowance * 0.0000015)
+            if not self.settings.cloud_dry_run and not api_key:
+                raise BackendUnavailable("Cloud backend is enabled but OPENAI_API_KEY is not set")
+            reservation_id = self.limiter.reserve_cloud(
+                provider="openai_compatible",
+                model=model,
+                request_kind="chat",
+                input_tokens=input_estimate,
+                output_tokens=output_allowance,
                 estimated_cost_usd=preflight_cost,
+                dry_run=self.settings.cloud_dry_run,
+                character_id=character["id"],
             )
             if self.settings.cloud_dry_run:
                 content = (
                     "[Cloud dry run] This character is configured for an OpenAI-compatible "
                     "provider. Disable dry-run only after reviewing limits and credentials."
                 )
-                self.database.log_usage(
-                    provider="openai_compatible",
-                    model=model,
-                    request_kind="chat",
+                output_tokens = approximate_tokens(content)
+                self.database.update_usage_log(
+                    reservation_id,
                     input_tokens=input_estimate,
-                    output_tokens=approximate_tokens(content),
+                    output_tokens=output_tokens,
+                    estimated_cost_usd=0,
                     dry_run=True,
-                    character_id=character["id"],
                 )
                 return LLMResult(
                     content=content,
                     backend="openai_compatible",
                     model=model,
                     input_tokens=input_estimate,
-                    output_tokens=approximate_tokens(content),
+                    output_tokens=output_tokens,
                     estimated_cost_usd=0,
                     dry_run=True,
                 )
-            if not api_key:
-                raise BackendUnavailable("Cloud backend is enabled but OPENAI_API_KEY is not set")
         payload = {
             "model": model,
             "messages": messages,
@@ -405,15 +412,13 @@ class LLMService:
         # The estimate is intentionally configurable in a future release and
         # conservatively non-zero today; it is a guardrail, not a billing record.
         estimated_cost = (input_tokens * 0.0000005) + (output_tokens * 0.0000015) if cloud else 0
-        if cloud:
-            self.database.log_usage(
-                provider="openai_compatible",
-                model=model,
-                request_kind="chat",
+        if cloud and reservation_id is not None:
+            self.database.update_usage_log(
+                reservation_id,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 estimated_cost_usd=estimated_cost,
-                character_id=character["id"],
+                dry_run=False,
             )
         return LLMResult(
             content=content,

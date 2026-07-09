@@ -913,9 +913,8 @@ def create_app(runtime_settings: Settings | None = None) -> FastAPI:
         if payload.character_id is not None:
             _require_character_access(payload.character_id, principal)
         limiter = RateLimiter(database)
-        limiter.check_cloud(estimated_tokens=0, request_kind="image")
         dry_run = payload.dry_run or settings.cloud_dry_run
-        database.log_usage(
+        limiter.reserve_cloud(
             provider=payload.provider,
             model="image-provider-placeholder",
             request_kind="image",

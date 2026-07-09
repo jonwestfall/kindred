@@ -53,3 +53,6 @@ versioning once the first release is tagged.
 - SQLite now records a schema migration version, exposes it in health and
   backup metadata, and rejects future-schema backup restores before replacing
   the live database.
+- Cloud chat and image-provider attempts now reserve usage budget in SQLite
+  before dispatch so simultaneous requests cannot spend the same remaining
+  budget slot.

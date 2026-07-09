@@ -14,14 +14,15 @@ provider-side budgets and alerts.
 | Cloud spend ceiling | $2.00 | Estimated rolling 24-hour cost |
 | Image generations per day | 2 | Image tasks in rolling 24 hours |
 
-The limiter reads SQLite immediately before a cloud call. A violation returns
-HTTP `429`; no provider request is made.
+The limiter reads SQLite immediately before a cloud call and writes a usage
+reservation in the same SQLite transaction. A violation returns HTTP `429`; no
+provider request is made.
 
 Before a call, tokens are conservatively approximated from character count plus
-an output allowance. Afterward, provider usage replaces estimates for the
-logged row when available. Cost coefficients are conservative MVP defaults in
-`llm.py`; they do not match every provider. Set a lower Kindred ceiling than
-your real budget and configure hard limits at the provider too.
+an output allowance. Afterward, provider usage replaces the reservation
+estimates for the logged row when available. Cost coefficients are conservative
+MVP defaults in `llm.py`; they do not match every provider. Set a lower Kindred
+ceiling than your real budget and configure hard limits at the provider too.
 
 ## Dry run
 
@@ -47,10 +48,14 @@ TOKEN="$(
 curl http://127.0.0.1:8000/api/usage -H "authorization: Bearer $TOKEN"
 ```
 
-## Concurrency limitation
+## Concurrency behavior
 
-Usage is recorded after a successful provider response. Two exactly simultaneous
-cloud requests could pass the same remaining budget before either writes usage.
-Kindred's Pi/home-server deployment normally generates only a small number of
-requests at a time. A future hardening pass should reserve budget
-transactionally before dispatch.
+Cloud chat and image-provider attempts reserve budget before dispatch by using a
+short SQLite `BEGIN IMMEDIATE` transaction. This means two simultaneous Kindred
+requests should see each other's reserved rows instead of both spending the same
+remaining budget slot.
+
+If a live provider call fails after reservation, the conservative reservation
+remains in the local usage ledger. This is intentional for the MVP: it favors
+cost protection and clear auditability over automatically refunding ambiguous
+network attempts.
